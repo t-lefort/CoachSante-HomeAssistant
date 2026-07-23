@@ -27,6 +27,11 @@ SIGNATURE_PREFIX: Final = "sha256="
 # Taille maximale d'un corps de requête accepté (photo en base64 incluse).
 MAX_PAYLOAD_BYTES: Final = 12 * 1024 * 1024
 
+# Anti-rejeu : un payload dont `sent_at` est plus vieux que ça est refusé. L'app
+# re-date `sent_at` (et re-signe) à chaque tentative d'envoi, si bien que seul le
+# rejeu d'une requête capturée sur le réseau tombe hors de cette fenêtre.
+REPLAY_MAX_AGE_SECONDS: Final = 300
+
 PAYLOAD_TYPE_METRICS: Final = "metrics"
 PAYLOAD_TYPE_MEAL_PHOTO: Final = "meal_photo"
 

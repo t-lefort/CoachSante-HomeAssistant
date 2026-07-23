@@ -347,6 +347,15 @@ METRIC_DESCRIPTIONS: dict[str, SensorEntityDescription] = {
     description.key: description for description in _DESCRIPTIONS
 }
 
+# Clés des métriques « somme du jour » (compteurs cumulatifs, remis à zéro à
+# minuit). Elles seules doivent retomber à zéro au changement de jour ; une
+# métrique « dernier » (poids, fréquence cardiaque…) garde sa dernière valeur.
+DAILY_SUM_KEYS: frozenset[str] = frozenset(
+    description.key
+    for description in _DESCRIPTIONS
+    if description.state_class == SensorStateClass.TOTAL_INCREASING
+)
+
 
 # --- Nutrition -------------------------------------------------------------
 # Compteurs cumulés sur la journée, remis à zéro à minuit. `TOTAL` + `last_reset`

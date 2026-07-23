@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+from datetime import timedelta
 import hashlib
 import hmac
 import logging
@@ -28,6 +29,7 @@ from .const import (
     MAX_PAYLOAD_BYTES,
     PAYLOAD_TYPE_MEAL_PHOTO,
     PAYLOAD_TYPE_METRICS,
+    REPLAY_MAX_AGE_SECONDS,
     SIGNATURE_PREFIX,
     signal_metrics_updated,
     signal_photo_updated,
@@ -68,6 +70,10 @@ async def async_handle_webhook(
     if not isinstance(payload, dict):
         return web.Response(status=400, text="le corps doit être un objet JSON")
 
+    if _payload_is_stale(payload):
+        _LOGGER.warning("Payload rejeté (anti-rejeu) sur le webhook de %s", data.person)
+        return web.Response(status=400, text="horodatage « sent_at » trop ancien")
+
     payload_type = payload.get("type")
     if payload_type == PAYLOAD_TYPE_METRICS:
         return _handle_metrics(hass, entry, data, payload)
@@ -83,6 +89,20 @@ def _signature_is_valid(secret: str, body: bytes, header: str | None) -> bool:
         return False
     expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(header[len(SIGNATURE_PREFIX) :], expected)
+
+
+def _payload_is_stale(payload: dict[str, Any]) -> bool:
+    """Vrai si `sent_at` est plus vieux que la fenêtre anti-rejeu.
+
+    Absent ou illisible, on laisse passer : c'est le secret HMAC qui protège
+    l'intégrité, `sent_at` ne sert qu'à écarter le rejeu d'une requête capturée.
+    Un `sent_at` dans le futur (dérive d'horloge) est également accepté.
+    """
+    sent_at = dt_util.parse_datetime(payload.get("sent_at") or "")
+    if sent_at is None:
+        return False
+    age = dt_util.utcnow() - dt_util.as_utc(sent_at)
+    return age > timedelta(seconds=REPLAY_MAX_AGE_SECONDS)
 
 
 def _handle_metrics(
@@ -132,7 +152,7 @@ async def _handle_meal_photo(
         return web.Response(status=400, text=f"type d'image non supporté : {content_type!r}")
 
     try:
-        raw = base64.b64decode(photo["data"], validate=True)
+        raw = await hass.async_add_executor_job(_decode_base64, photo["data"])
     except (binascii.Error, ValueError):
         return web.Response(status=400, text="base64 invalide")
 
@@ -165,3 +185,8 @@ async def _handle_meal_photo(
     )
 
     return web.json_response({"ok": True, "path": str(path)})
+
+
+def _decode_base64(data: str) -> bytes:
+    """Décode le base64 de la photo. Lourd (~10 Mo) → hors boucle d'événements."""
+    return base64.b64decode(data, validate=True)

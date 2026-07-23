@@ -22,6 +22,7 @@ from .const import (
     NUTRIENTS,
     STORAGE_VERSION,
 )
+from .metrics import DAILY_SUM_KEYS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -122,6 +123,8 @@ class CoachSanteData:
             self.photo_updated = None
 
         self._ensure_today()
+        # Redémarrage après minuit : les compteurs du jour d'hier sont périmés.
+        self.reset_stale_daily_metrics()
 
     def async_schedule_save(self) -> None:
         """Programme une sauvegarde différée de l'état."""
@@ -180,6 +183,27 @@ class CoachSanteData:
             accepted.append(key)
 
         return accepted, new_keys
+
+    def reset_stale_daily_metrics(self) -> list[str]:
+        """Remet à zéro les compteurs « somme du jour » restés sur un jour passé.
+
+        Sans ça, un compteur comme `steps` afficherait le total d'hier jusqu'au
+        premier envoi du matin, trompant une automatisation qui le lirait juste
+        après minuit. On ne touche qu'aux métriques dont le `jour` connu est
+        antérieur à aujourd'hui : une valeur sans jour ou « dernier » est laissée
+        telle quelle. Renvoie les clés remises à zéro.
+        """
+        today = _today()
+        reset: list[str] = []
+        for key in DAILY_SUM_KEYS:
+            metric = self.metrics.get(key)
+            if metric is None or not metric.day or metric.day >= today:
+                continue
+            metric.value = 0
+            metric.day = today
+            metric.updated_at = dt_util.utcnow().isoformat()
+            reset.append(key)
+        return reset
 
     # --- Nutrition ---------------------------------------------------------
 
@@ -246,26 +270,44 @@ class CoachSanteData:
         path = self.photo_dir / filename
         retention = self.entry.options.get(CONF_PHOTO_RETENTION, DEFAULT_PHOTO_RETENTION)
 
-        await self.hass.async_add_executor_job(_write_photo, path, raw, retention)
+        # `_write_photo` renvoie le chemin réellement écrit : deux photos prises
+        # dans la même seconde ne s'écrasent pas, la seconde est suffixée.
+        written = await self.hass.async_add_executor_job(_write_photo, path, raw, retention)
 
-        self.photo_path = str(path)
+        self.photo_path = str(written)
         self.photo_updated = taken_at
         self.photo_note = note
         self.photo_content_type = content_type
-        return path
+        return written
 
 
 def _today() -> str:
     return dt_util.now().date().isoformat()
 
 
-def _write_photo(path: Path, raw: bytes, retention: int) -> None:
-    """Écrit la photo et purge les plus anciennes. Exécuté hors boucle d'événements."""
+def _unique_path(path: Path) -> Path:
+    """Renvoie `path`, ou une variante suffixée `_2`, `_3`… s'il existe déjà."""
+    if not path.exists():
+        return path
+    counter = 2
+    while True:
+        candidate = path.with_name(f"{path.stem}_{counter}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
+def _write_photo(path: Path, raw: bytes, retention: int) -> Path:
+    """Écrit la photo et purge les plus anciennes. Exécuté hors boucle d'événements.
+
+    Renvoie le chemin réellement écrit (suffixé en cas de collision de nom).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    path = _unique_path(path)
     path.write_bytes(raw)
 
     if retention <= 0:
-        return
+        return path
 
     photos = sorted(
         (item for item in path.parent.iterdir() if item.is_file()),
@@ -276,3 +318,5 @@ def _write_photo(path: Path, raw: bytes, retention: int) -> None:
             old.unlink()
         except OSError:
             _LOGGER.warning("Impossible de supprimer l'ancienne photo %s", old)
+
+    return path

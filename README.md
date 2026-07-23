@@ -65,9 +65,14 @@ doit respecter.
 
 ```bash
 ruff check custom_components
-ruff format --check custom_components
+
+python -m venv .venv
+.venv/bin/pip install -r requirements_test.txt
+.venv/bin/pytest
 ```
 
+La suite pytest (`tests/`) s'appuie sur `pytest-homeassistant-custom-component` :
+config flow, webhook (signature, tailles, types), nutrition et persistance.
 Home Assistant tourne en Python 3.13 ; le code cible cette version.
 
 ## Licence

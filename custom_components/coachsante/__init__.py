@@ -25,6 +25,7 @@ from .const import (
     NUTRIENTS,
     SERVICE_ADD_NUTRITION,
     SERVICE_RESET_DAY,
+    signal_metrics_updated,
     signal_nutrition_updated,
 )
 from .data import CoachSanteConfigEntry, CoachSanteData
@@ -79,10 +80,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: CoachSanteConfigEntry) -
 
     @callback
     def _handle_midnight(_now) -> None:
-        """Remet les compteurs nutritionnels à zéro au changement de jour."""
+        """Remet à zéro au changement de jour : nutrition et « somme du jour »."""
+        changed = False
         if data.roll_over_day():
-            data.async_schedule_save()
             async_dispatcher_send(hass, signal_nutrition_updated(entry.entry_id))
+            changed = True
+        if data.reset_stale_daily_metrics():
+            async_dispatcher_send(hass, signal_metrics_updated(entry.entry_id))
+            changed = True
+        if changed:
+            data.async_schedule_save()
 
     entry.async_on_unload(
         async_track_time_change(hass, _handle_midnight, hour=0, minute=0, second=0)

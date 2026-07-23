@@ -38,6 +38,21 @@ Seul un **200** autorise l'app à retirer le lot de sa file d'attente. Tout le
 reste doit être rejoué (avec backoff), sauf 400 et 401 qui sont des erreurs
 définitives : rejouer ne changera rien, il faut les journaliser et jeter le lot.
 
+## Anti-rejeu (`sent_at`)
+
+Chaque payload porte un champ `sent_at` (ISO 8601). L'intégration refuse par un
+**400** tout payload dont le `sent_at` est plus vieux que **5 minutes** : un
+attaquant qui rejouerait une requête capturée sur le réseau tombe hors de la
+fenêtre, et sa copie exacte des octets ne peut pas être re-signée.
+
+Conséquence côté app : **`sent_at` est l'instant de *cette tentative d'envoi*, pas
+celui de la mise en file.** À chaque retry, l'app re-date `sent_at` **et re-signe**
+le corps. Un lot resté longtemps dans la file (réseau coupé) part donc avec un
+`sent_at` frais et n'est jamais rejeté à tort.
+
+`sent_at` absent ou illisible n'est pas bloquant (rétro-compatibilité) ; un
+`sent_at` légèrement dans le futur (dérive d'horloge) est accepté.
+
 ## Type `metrics` — données santé
 
 ```json
@@ -60,6 +75,15 @@ définitives : rejouer ne changera rien, il faut les journaliser et jeter le lot
 Seuls `key` et `value` sont obligatoires ; les autres champs finissent en
 attributs d'entité. Une clé absente du catalogue crée quand même une entité
 générique — rien n'est perdu.
+
+Le champ `day` (jour concerné, `AAAA-MM-JJ`) sert au **changement de jour**. À
+minuit — et à tout redémarrage de HA franchissant minuit — les métriques de type
+« somme » (`state_class: total_increasing` : `steps`, `active_energy`…) dont le
+`day` est antérieur à aujourd'hui **retombent à zéro**. Sans ça, `steps`
+afficherait le total d'hier jusqu'au premier envoi du matin, ce qui trompe une
+automatisation lue juste après minuit. Les métriques « dernier » (poids,
+fréquence cardiaque, VO2 max…) gardent au contraire leur dernière valeur.
+Renseignez donc `day` sur les métriques cumulatives.
 
 **L'app envoie des valeurs déjà agrégées.** C'est délibéré : HealthKit
 dédoublonne les échantillons qui arrivent en double de l'iPhone et de l'Apple
@@ -132,6 +156,7 @@ là que pour d'éventuelles saisies manuelles dans Apple Santé.
 ```json
 {
   "type": "meal_photo",
+  "sent_at": "2026-07-22T12:35:10Z",
   "taken_at": "2026-07-22T12:35:00+02:00",
   "note": "midi, au boulot",
   "photo": {
@@ -140,6 +165,9 @@ là que pour d'éventuelles saisies manuelles dans Apple Santé.
   }
 }
 ```
+
+`sent_at` sert l'anti-rejeu (voir plus haut) ; `taken_at` est l'instant de la
+prise de vue, qui peut être bien plus ancien et sert à nommer le fichier.
 
 `content_type` accepte `image/jpeg` et `image/png`. L'app doit **redimensionner
 avant l'envoi** (côté long ~1600 px, JPEG qualité ~0,7) : une photo brute

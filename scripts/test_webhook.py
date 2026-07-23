@@ -10,6 +10,7 @@ Sert à valider l'intégration Home Assistant avant que l'app iOS existe.
 from __future__ import annotations
 
 import base64
+from datetime import UTC, datetime
 import hashlib
 import hmac
 import json
@@ -31,8 +32,11 @@ EXEMPLE_METRIQUES = [
 
 def build_payload(mode: str, argument: str | None) -> dict:
     """Construit la charge utile correspondant au mode demandé."""
+    # `sent_at` daté à l'instant de l'envoi : c'est ce que vérifie l'anti-rejeu.
+    sent_at = datetime.now(UTC).isoformat()
+
     if mode == "metrics":
-        return {"type": "metrics", "metrics": EXEMPLE_METRIQUES}
+        return {"type": "metrics", "sent_at": sent_at, "metrics": EXEMPLE_METRIQUES}
 
     if mode == "photo":
         if argument is None:
@@ -43,6 +47,7 @@ def build_payload(mode: str, argument: str | None) -> dict:
             raise SystemExit(f"Extension non supportée : {path.suffix!r} (attendu .jpg ou .png)")
         return {
             "type": "meal_photo",
+            "sent_at": sent_at,
             "note": "envoi de test",
             "photo": {
                 "content_type": content_type,

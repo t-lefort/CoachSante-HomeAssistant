@@ -1,0 +1,7 @@
+# Dépendances pour lancer la suite pytest de l'intégration Home Assistant.
+#   python -m venv .venv && .venv/bin/pip install -r requirements_test.txt
+#   .venv/bin/pytest
+#
+# pytest-homeassistant-custom-component tire Home Assistant et pytest ; la version
+# épinglée fixe la version de HA testée. À bumper quand on cible un HA plus récent.
+pytest-homeassistant-custom-component==0.13.205

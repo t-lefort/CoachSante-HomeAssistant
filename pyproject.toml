@@ -1,3 +1,8 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
 [tool.ruff]
 line-length = 100
 # Home Assistant tourne en Python 3.13, même si le poste de dev est en 3.11.
@@ -13,6 +18,11 @@ ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"
+
+[tool.ruff.lint.per-file-ignores]
+# Les tests lisent/écrivent des fichiers en synchrone : c'est volontaire et sans
+# risque hors boucle d'événements de production.
+"tests/**" = ["ASYNC240"]
 
 [tool.ruff.lint.isort]
 # `homeassistant` est une dépendance externe pour un custom component.
