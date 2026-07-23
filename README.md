@@ -61,6 +61,19 @@ Le format des charges utiles du webhook (métriques, photo, signature) est décr
 [docs/protocole-webhook.md](docs/protocole-webhook.md). C'est le contrat que l'app iOS
 doit respecter.
 
+## Icône
+
+L'icône de l'intégration est embarquée dans `custom_components/coachsante/brand/`
+(`icon.png` 256², `icon@2x.png` 512², fond transparent). Depuis Home Assistant
+2026.3, ces images locales sont servies en priorité (config flow, page de
+l'intégration, appareils) — aucune soumission au dépôt `home-assistant/brands`
+n'est nécessaire. Pour les régénérer (nécessite un Mac avec Swift) :
+
+```bash
+swift scripts/make_ha_icon.swift 512 custom_components/coachsante/brand/icon@2x.png
+swift scripts/make_ha_icon.swift 256 custom_components/coachsante/brand/icon.png
+```
+
 ## Développement
 
 ```bash
