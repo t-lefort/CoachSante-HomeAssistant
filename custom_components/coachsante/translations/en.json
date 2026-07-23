@@ -1,0 +1,79 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "CoachSanté",
+        "description": "Add one entry per person. Each person gets their own webhook, their own device and their own entities.",
+        "data": {
+          "person": "First name"
+        }
+      },
+      "credentials": {
+        "title": "Settings for the iOS app",
+        "description": "Copy these two values into the CoachSanté app on {person}'s iPhone. **The secret is shown only once.**\n\n**Webhook URL**\n```\n{url}\n```\n\n**Shared secret**\n```\n{secret}\n```\n\nThe app signs every request with this secret (`X-CoachSante-Signature`). If you lose it, remove the entry and create it again."
+      }
+    },
+    "error": {
+      "person_empty": "Please enter a first name."
+    },
+    "abort": {
+      "already_configured": "This person is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "CoachSanté options",
+        "data": {
+          "photo_retention": "Meal photos to keep"
+        },
+        "data_description": {
+          "photo_retention": "Older photos are deleted from disk beyond this count. 0 keeps everything."
+        }
+      }
+    }
+  },
+  "services": {
+    "add_nutrition": {
+      "name": "Add nutrition",
+      "description": "Adds a meal's macros to the day's counters. Meant to be called by the automation that analyses the meal photo.",
+      "fields": {
+        "entry_id": {
+          "name": "Person",
+          "description": "Which CoachSanté entry to credit."
+        },
+        "label": {
+          "name": "Label",
+          "description": "Short description of the meal, shown by the \"Last meal\" sensor."
+        },
+        "energy_kcal": { "name": "Calories", "description": "Energy in kcal." },
+        "protein_g": { "name": "Protein", "description": "Protein in grams." },
+        "carbs_g": { "name": "Carbohydrates", "description": "Carbohydrates in grams." },
+        "fat_g": { "name": "Fat", "description": "Fat in grams." },
+        "fiber_g": { "name": "Fibre", "description": "Fibre in grams." },
+        "sugar_g": { "name": "Sugars", "description": "Sugars in grams." }
+      }
+    },
+    "reset_day": {
+      "name": "Reset the day",
+      "description": "Sets today's nutrition counters back to zero.",
+      "fields": {
+        "entry_id": {
+          "name": "Person",
+          "description": "Which CoachSanté entry to reset."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "No CoachSanté entry with id {entry_id}."
+    },
+    "entry_not_loaded": {
+      "message": "The CoachSanté entry for {person} is not loaded."
+    },
+    "no_nutrient_provided": {
+      "message": "Provide at least one nutrient to add."
+    }
+  }
+}

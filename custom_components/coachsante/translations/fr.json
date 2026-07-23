@@ -1,0 +1,79 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "CoachSanté",
+        "description": "Ajoutez une entrée par personne. Chacune aura son propre webhook, son propre appareil et ses propres entités.",
+        "data": {
+          "person": "Prénom"
+        }
+      },
+      "credentials": {
+        "title": "Réglages à saisir dans l'app iOS",
+        "description": "Recopiez ces deux valeurs dans l'app CoachSanté sur l'iPhone de {person}. **Le secret n'est affiché qu'une seule fois.**\n\n**URL du webhook**\n```\n{url}\n```\n\n**Secret partagé**\n```\n{secret}\n```\n\nL'app signe chaque requête avec ce secret (en-tête `X-CoachSante-Signature`). En cas de perte, supprimez l'entrée et recréez-la."
+      }
+    },
+    "error": {
+      "person_empty": "Merci de saisir un prénom."
+    },
+    "abort": {
+      "already_configured": "Cette personne est déjà configurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options de CoachSanté",
+        "data": {
+          "photo_retention": "Nombre de photos de repas conservées"
+        },
+        "data_description": {
+          "photo_retention": "Au-delà de ce nombre, les plus anciennes photos sont supprimées du disque. 0 = on garde tout."
+        }
+      }
+    }
+  },
+  "services": {
+    "add_nutrition": {
+      "name": "Ajouter de la nutrition",
+      "description": "Ajoute les macros d'un repas aux compteurs du jour. Prévu pour être appelé par l'automatisation qui analyse la photo de repas.",
+      "fields": {
+        "entry_id": {
+          "name": "Personne",
+          "description": "L'entrée CoachSanté à créditer."
+        },
+        "label": {
+          "name": "Libellé",
+          "description": "Description courte du repas, reprise par le capteur « Dernier repas »."
+        },
+        "energy_kcal": { "name": "Calories", "description": "Énergie en kcal." },
+        "protein_g": { "name": "Protéines", "description": "Protéines en grammes." },
+        "carbs_g": { "name": "Glucides", "description": "Glucides en grammes." },
+        "fat_g": { "name": "Lipides", "description": "Lipides en grammes." },
+        "fiber_g": { "name": "Fibres", "description": "Fibres en grammes." },
+        "sugar_g": { "name": "Sucres", "description": "Sucres en grammes." }
+      }
+    },
+    "reset_day": {
+      "name": "Remettre la journée à zéro",
+      "description": "Remet à zéro les compteurs nutritionnels du jour.",
+      "fields": {
+        "entry_id": {
+          "name": "Personne",
+          "description": "L'entrée CoachSanté à réinitialiser."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "Aucune entrée CoachSanté avec l'identifiant {entry_id}."
+    },
+    "entry_not_loaded": {
+      "message": "L'entrée CoachSanté de {person} n'est pas chargée."
+    },
+    "no_nutrient_provided": {
+      "message": "Indiquez au moins un nutriment à ajouter."
+    }
+  }
+}

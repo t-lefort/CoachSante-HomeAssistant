@@ -1,0 +1,73 @@
+add_nutrition:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: coachsante
+    label:
+      example: Poulet basquaise et riz
+      selector:
+        text:
+    energy_kcal:
+      example: 620
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 1
+          unit_of_measurement: kcal
+          mode: box
+    protein_g:
+      example: 38
+      selector:
+        number:
+          min: 0
+          max: 500
+          step: 0.1
+          unit_of_measurement: g
+          mode: box
+    carbs_g:
+      example: 65
+      selector:
+        number:
+          min: 0
+          max: 1000
+          step: 0.1
+          unit_of_measurement: g
+          mode: box
+    fat_g:
+      example: 18
+      selector:
+        number:
+          min: 0
+          max: 500
+          step: 0.1
+          unit_of_measurement: g
+          mode: box
+    fiber_g:
+      example: 7
+      selector:
+        number:
+          min: 0
+          max: 200
+          step: 0.1
+          unit_of_measurement: g
+          mode: box
+    sugar_g:
+      example: 12
+      selector:
+        number:
+          min: 0
+          max: 500
+          step: 0.1
+          unit_of_measurement: g
+          mode: box
+
+reset_day:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: coachsante
