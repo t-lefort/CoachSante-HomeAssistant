@@ -5,13 +5,17 @@
 # AI Task de l'intégration Anthropic, récupère les macros en JSON, et les
 # réinjecte dans les compteurs du jour via `coachsante.add_nutrition`.
 #
-# Première version : PAS de contexte de recettes (Cookidoo, courses…). Le
-# modèle estime uniquement à partir de la photo et de la note éventuelle.
+# L'événement porte la note saisie dans l'app **et** le contexte des deux
+# dernières semaines (recettes, emballages relevés, portions) déjà assemblé par
+# l'intégration : les deux sont injectés dans le prompt, sans rien aller
+# chercher. C'est le levier de précision le plus important — voir « Calibrer »
+# dans le README de ce dossier.
 #
 # À adapter avant utilisation :
 #   - `ai_task_entity` : l'entité AI Task créée par l'intégration Anthropic
 #     (Outils de développement → États, filtrer sur `ai_task.`).
-#   - `media_root`     : la racine média de HA si ce n'est pas `/media`.
+#   - `media_root`     : la racine média de HA si ce n'est pas `/media`, et
+#     seulement si `media_content_id` arrive vide.
 #
 # Voir README.md dans ce dossier pour l'installation et le dépannage.
 
@@ -34,12 +38,16 @@ variables:
   # -------------------------------------------------------------------------
   personne: "{{ trigger.event.data.person }}"
   note: "{{ trigger.event.data.note or '' }}"
+  contexte: "{{ trigger.event.data.context or '' }}"
   chemin: "{{ trigger.event.data.path }}"
-  # `path` est absolu côté disque (/media/coachsante/thomas/…) ; l'API media
-  # source veut un identifiant relatif à la racine média.
+  # L'intégration calcule déjà l'identifiant media source. Il n'est vide que si
+  # aucun dossier média local n'est déclaré (`homeassistant.media_dirs`) : on
+  # retombe alors sur la conversion à la main du chemin disque
+  # (/media/coachsante/thomas/…), relatif à la racine média.
   media_id: >-
-    {{ 'media-source://media_source/local/'
-       ~ chemin | replace(media_root ~ '/', '', 1) }}
+    {{ trigger.event.data.media_content_id
+       or ('media-source://media_source/local/'
+           ~ chemin | replace(media_root ~ '/', '', 1)) }}
 
 actions:
   - alias: Demander l'analyse nutritionnelle à Claude
@@ -53,6 +61,18 @@ actions:
 
         {% if note %}Note laissée par la personne au moment de la prise de vue
         (elle prime sur ta lecture visuelle en cas de doute) : « {{ note }} »
+        {% endif %}
+
+        {% if contexte %}Contexte envoyé par la personne ces dernières semaines
+        — recettes, étiquettes d'emballages relevées, tailles de portions :
+
+        {{ contexte }}
+
+        Quand un élément de ce contexte correspond visiblement au plat
+        photographié, appuie-toi dessus plutôt que sur ton estimation à vue :
+        des valeurs lues sur un emballage sont bien plus fiables. Ignore ce qui
+        ne correspond pas — ce contexte couvre deux semaines, tout n'est pas
+        dans l'assiette du jour.
         {% endif %}
 
         Méthode :

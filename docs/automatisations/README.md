@@ -9,6 +9,12 @@ logique d'analyse.
 | Fichier | Ce qu'il fait |
 |---|---|
 | [`analyse-repas-llm.yaml`](analyse-repas-llm.yaml) | Photo de repas → estimation des macros par Claude → `coachsante.add_nutrition` |
+| [`analyse-contexte-photo.yaml`](analyse-contexte-photo.yaml) | Photo d'emballage → relevé de l'étiquette → `coachsante.add_context` |
+
+Les deux se complètent : la seconde remplit le contexte, que la première reçoit
+tout assemblé dans l'événement `coachsante_meal_photo` et injecte dans son
+prompt. Installer la première seule fonctionne ; installer la seconde sans la
+première laisserait des photos de contexte en attente d'analyse pour rien.
 
 ## Analyse LLM des photos de repas
 
@@ -72,11 +78,19 @@ atterrissent toujours sur les compteurs de la bonne personne.
      media_root: /media               # ← racine média de HA
    ```
 
-   `media_root` doit correspondre au dossier configuré dans
-   `homeassistant.media_dirs` (`/media` par défaut). L'automatisation s'en
-   sert pour convertir le chemin absolu de la photo
-   (`/media/coachsante/thomas/2026-07-22_123500.jpg`) en identifiant media
-   source (`media-source://media_source/local/coachsante/thomas/…`).
+   `media_root` n'est plus qu'un filet de sécurité : depuis la 0.3.0,
+   l'intégration met l'identifiant media source directement dans l'événement
+   (`media_content_id`), et l'automatisation le prend tel quel. La conversion à
+   la main du chemin absolu (`/media/coachsante/thomas/2026-07-22_123500.jpg`)
+   ne sert que si ce champ arrive vide, c'est-à-dire si aucun dossier média
+   local n'est déclaré dans `homeassistant.media_dirs` :
+
+   ```yaml
+   # configuration.yaml
+   homeassistant:
+     media_dirs:
+       local: /media
+   ```
 
 3. Recharger les automatisations et vérifier que
    `automation.coachsante_analyse_llm_d_une_photo_de_repas` apparaît.
@@ -93,13 +107,103 @@ event_data:
   entry_id: 01JXXXXXXXXXXXXXXXXXXXXXXX   # ← Paramètres → Appareils et services → l'entrée CoachSanté (dans l'URL)
   person: Thomas
   path: /media/coachsante/thomas/2026-07-22_123500.jpg
+  media_content_id: media-source://media_source/local/coachsante/thomas/2026-07-22_123500.jpg
   image_entity_id: image.thomas_dernier_repas
   note: test manuel
   taken_at: "2026-07-22T12:35:00+02:00"
+  context: "- 2026-07-22 11:00 : Raviolis Rana — 232 kcal / 100 g, paquet de 250 g"
 ```
 
 Les compteurs `sensor.thomas_calories_du_jour` & compagnie doivent bouger dans
 la foulée, et une ligne apparaître dans le journal de bord.
+
+## Description des photos de contexte
+
+### Ce que ça fait
+
+```
+app iOS ──photo d'emballage──▶ webhook ──▶ event coachsante_context_photo
+                                                    │  (élément « en attente »)
+                                                    ▼
+                                        ai_task.generate_data (Claude + photo)
+                                                    │
+                                              relevé de l'étiquette
+                                                    ▼
+                                    coachsante.add_context (context_id)
+                                                    │
+                                                    ▼
+                              sensor.<personne>_contexte_nutrition (attribut « prompt »)
+                                                    │
+                                                    ▼
+                          injecté dans le prompt du prochain repas photographié
+```
+
+Tant que l'automatisation n'a pas répondu, l'élément reste marqué « en attente »
+(attribut `en_attente_analyse` du capteur) et **n'entre pas** dans le prompt : un
+relevé à moitié fait ne pollue jamais une estimation.
+
+L'app peut aussi envoyer du contexte purement textuel (un lien de recette collé
+dans l'onglet Contexte). Celui-là n'a rien à analyser : il émet
+`coachsante_context` et rejoint directement le prompt.
+
+### Prérequis
+
+Les mêmes que ci-dessus — une entité AI Task, un modèle qui lit les images. Les
+étiquettes nutritionnelles sont écrites petit : l'app les envoie moins
+compressées que les photos de repas (2000 px, JPEG 0,85), mais un modèle
+« mini » restera en peine.
+
+### Rétention
+
+Les éléments de contexte vivent **14 jours**, puis disparaissent avec leur photo.
+Réglable dans les options de l'intégration (*Paramètres → Appareils et services →
+CoachSanté → Configurer*) ; 0 conserve tout. Bornes : 30 éléments, 2 000
+caractères par texte, 6 000 pour le bloc assemblé — au-delà, ce sont les plus
+anciens qui sautent.
+
+Pour faire le ménage à la main :
+
+```yaml
+actions:
+  - action: coachsante.clear_context
+    data:
+      entry_id: 01JXXXXXXXXXXXXXXXXXXXXXXX
+      # sans context_id, c'est tout le contexte de la personne qui part
+```
+
+Et pour ajouter du contexte sans passer par l'app (liste de courses, recette de
+la semaine dans un `input_text`, élément d'une liste `todo`) :
+
+```yaml
+actions:
+  - action: coachsante.add_context
+    data:
+      entry_id: 01JXXXXXXXXXXXXXXXXXXXXXXX
+      label: Menu de la semaine
+      text: "{{ states('input_text.recette_du_soir') }}"
+```
+
+### Tester sans photographier d'emballage
+
+```yaml
+event_type: coachsante_context_photo
+event_data:
+  entry_id: 01JXXXXXXXXXXXXXXXXXXXXXXX
+  person: Thomas
+  context_id: 3f9c1a7b2e4d6058          # ← doit exister : envoie d'abord une photo de contexte
+  label: Paquet de raviolis
+  text: null
+  captured_at: "2026-07-25T19:59:00+02:00"
+  path: /media/coachsante/thomas/contexte/2026-07-25_195900.jpg
+  media_content_id: media-source://media_source/local/coachsante/thomas/contexte/2026-07-25_195900.jpg
+```
+
+Le `context_id` doit correspondre à un élément réel, sinon `add_context` lève
+`context_not_found` — c'est voulu : une analyse orpheline ne doit pas créer
+silencieusement un élément fantôme. Le plus simple est d'envoyer une vraie photo
+de contexte (depuis l'app, ou avec
+`scripts/test_webhook.py … contexte-photo emballage.jpg`) et de relire le
+`context_id` dans l'attribut `elements` du capteur.
 
 ### Réglages courants
 
@@ -128,11 +232,14 @@ Les estimations à partir d'une photo seule ont une marge d'erreur réelle
    blanches font 26 cm de diamètre », « le verre bleu fait 25 cl ») dans le
    bloc `instructions` améliore nettement l'estimation des quantités.
 
-3. **Le contexte amont.** Si tu peux fournir à l'automatisation une liste de
-   plats candidats (recettes de la semaine, courses, planning de repas), la
-   glisser dans `instructions` fait passer le modèle de l'estimation à
-   l'identification. C'est de loin le gain le plus important, et le reste de
-   l'automatisation ne bouge pas — seul le bloc `instructions` s'allonge.
+3. **Le contexte amont.** Fournir au modèle une liste de plats candidats
+   (recettes de la semaine, étiquettes des produits du placard, portions
+   habituelles) le fait passer de l'estimation à l'identification. C'est de loin
+   le gain le plus important — et depuis la 0.3.0 il n'y a plus rien à bricoler :
+   l'onglet **Contexte** de l'app envoie ces éléments, l'intégration les garde
+   deux semaines et les met assemblés dans l'événement, l'automatisation les
+   injecte. Photographier l'emballage d'un plat préparé avant de le cuisiner vaut
+   mieux que n'importe quel réglage de prompt.
 
 ### Coût
 

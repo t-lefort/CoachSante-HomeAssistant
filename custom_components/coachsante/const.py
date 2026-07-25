@@ -11,9 +11,15 @@ DOMAIN: Final = "coachsante"
 CONF_PERSON: Final = "person"
 CONF_SECRET: Final = "secret"
 CONF_PHOTO_RETENTION: Final = "photo_retention"
+CONF_CONTEXT_RETENTION_DAYS: Final = "context_retention_days"
 
 # 0 = on ne supprime jamais rien.
 DEFAULT_PHOTO_RETENTION: Final = 0
+
+# Durée de vie d'un élément de contexte (lien de recette, description d'un
+# emballage…). Deux semaines : assez pour couvrir les restes et les recettes de
+# la semaine, assez court pour que le prompt ne se remplisse pas de vieilleries.
+DEFAULT_CONTEXT_RETENTION_DAYS: Final = 14
 
 # --- Stockage --------------------------------------------------------------
 
@@ -34,6 +40,15 @@ REPLAY_MAX_AGE_SECONDS: Final = 300
 
 PAYLOAD_TYPE_METRICS: Final = "metrics"
 PAYLOAD_TYPE_MEAL_PHOTO: Final = "meal_photo"
+PAYLOAD_TYPE_CONTEXT: Final = "context"
+
+# --- Contexte nutritionnel -------------------------------------------------
+# Bornes volontairement basses : le contenu part en attribut d'entité, et un
+# attribut trop gros encombre le recorder (au-delà de ~16 Kio il est refusé).
+
+MAX_CONTEXT_ITEMS: Final = 30
+MAX_CONTEXT_TEXT_LENGTH: Final = 2000
+MAX_CONTEXT_PROMPT_LENGTH: Final = 6000
 
 # --- Nutrition -------------------------------------------------------------
 
@@ -51,14 +66,22 @@ NUTRIENTS: Final = (
 EVENT_MEAL_PHOTO: Final = f"{DOMAIN}_meal_photo"
 EVENT_METRICS: Final = f"{DOMAIN}_metrics"
 EVENT_NUTRITION: Final = f"{DOMAIN}_nutrition"
+# Photo de contexte reçue : c'est le signal qui demande son analyse par un LLM.
+EVENT_CONTEXT_PHOTO: Final = f"{DOMAIN}_context_photo"
+# Un texte de contexte est disponible (saisi dans l'app, ou analyse revenue).
+EVENT_CONTEXT: Final = f"{DOMAIN}_context"
 
 # --- Services --------------------------------------------------------------
 
 SERVICE_ADD_NUTRITION: Final = "add_nutrition"
 SERVICE_RESET_DAY: Final = "reset_day"
+SERVICE_ADD_CONTEXT: Final = "add_context"
+SERVICE_CLEAR_CONTEXT: Final = "clear_context"
 
 ATTR_ENTRY_ID: Final = "entry_id"
 ATTR_LABEL: Final = "label"
+ATTR_TEXT: Final = "text"
+ATTR_CONTEXT_ID: Final = "context_id"
 
 # --- Signaux internes (dispatcher) -----------------------------------------
 
@@ -76,3 +99,8 @@ def signal_nutrition_updated(entry_id: str) -> str:
 def signal_photo_updated(entry_id: str) -> str:
     """Signal émis quand une nouvelle photo de repas arrive."""
     return f"{DOMAIN}_photo_{entry_id}"
+
+
+def signal_context_updated(entry_id: str) -> str:
+    """Signal émis quand le contexte nutritionnel change."""
+    return f"{DOMAIN}_context_{entry_id}"

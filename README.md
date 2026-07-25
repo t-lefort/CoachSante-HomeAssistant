@@ -10,19 +10,26 @@ le webhook est développée dans un dépôt séparé.
 
 ## Ce que fournit l'intégration
 
-- **Webhook signé** (un par personne) : reçoit métriques santé et photos de repas,
-  vérifie une signature HMAC-SHA256.
+- **Webhook signé** (un par personne) : reçoit métriques santé, photos de repas et
+  contexte nutritionnel, vérifie une signature HMAC-SHA256.
 - **Capteurs santé** (`sensor.*`) : pas, dépense énergétique, fréquence cardiaque,
   sommeil, métriques de démarche… créés à la volée selon ce que l'app envoie.
 - **Compteurs nutritionnels** cumulatifs sur la journée (kcal, protéines, glucides,
   lipides, fibres, sucres), remis à zéro à minuit heure locale
   (`state_class: total` + `last_reset`).
 - **Entité image** (`image.*`) : dernière photo de repas, plus le fichier sur disque
-  dans `/media/coachsante/<personne>/`.
-- **Services** : `coachsante.add_nutrition` (macros calculées par une automatisation)
-  et `coachsante.reset_day`.
+  dans `/media/coachsante/<personne>/`. Le commentaire joint à la photo est repris
+  en attribut et par le capteur `sensor.<personne>_note_du_dernier_repas`.
+- **Contexte nutritionnel** : liens de recettes, textes et photos d'emballages
+  envoyés depuis l'app, conservés 14 jours et assemblés en un bloc prêt à injecter
+  dans le prompt qui estime les repas (`sensor.<personne>_contexte_nutrition`,
+  attribut `prompt`). Les photos d'emballages sont décrites à réception par une
+  automatisation, et la description rejoint le contexte.
+- **Services** : `coachsante.add_nutrition` (macros calculées par une automatisation),
+  `coachsante.reset_day`, `coachsante.add_context`, `coachsante.clear_context`.
 - **Événements** : `coachsante_meal_photo`, `coachsante_metrics`,
-  `coachsante_nutrition` — points d'accroche des automatisations.
+  `coachsante_nutrition`, `coachsante_context`, `coachsante_context_photo` — points
+  d'accroche des automatisations.
 
 Plusieurs personnes peuvent coexister : une config entry = une personne = un device
 = un webhook, sans partage de données.
@@ -53,21 +60,25 @@ Pour vérifier que le webhook répond avant même d'avoir l'app :
 ```bash
 python scripts/test_webhook.py https://exemple.fr/api/webhook/<id> <secret> metrics
 python scripts/test_webhook.py https://exemple.fr/api/webhook/<id> <secret> photo repas.jpg
+python scripts/test_webhook.py https://exemple.fr/api/webhook/<id> <secret> contexte "https://cookidoo.fr/…"
+python scripts/test_webhook.py https://exemple.fr/api/webhook/<id> <secret> contexte-photo emballage.jpg
 ```
 
 ## Exemples d'automatisations
 
 L'intégration fournit les entrées (events, entité `image`) et reçoit les sorties
-(`coachsante.add_nutrition`), mais ne contient aucune logique d'analyse : celle-ci
-vit dans tes automatisations. Des exemples prêts à adapter sont dans
-[docs/automatisations/](docs/automatisations/) — à commencer par l'analyse d'une
-photo de repas par un LLM, qui remplit les compteurs nutritionnels du jour.
+(`coachsante.add_nutrition`, `coachsante.add_context`), mais ne contient aucune
+logique d'analyse : celle-ci vit dans tes automatisations. Des exemples prêts à
+adapter sont dans [docs/automatisations/](docs/automatisations/) — l'analyse d'une
+photo de repas par un LLM, qui remplit les compteurs nutritionnels du jour, et la
+description des photos de contexte, qui alimente ce que le modèle sait avant
+d'estimer.
 
 ## Protocole
 
-Le format des charges utiles du webhook (métriques, photo, signature) est décrit dans
-[docs/protocole-webhook.md](docs/protocole-webhook.md). C'est le contrat que l'app iOS
-doit respecter.
+Le format des charges utiles du webhook (métriques, photo, contexte, signature) est
+décrit dans [docs/protocole-webhook.md](docs/protocole-webhook.md). C'est le contrat
+que l'app iOS doit respecter.
 
 ## Icône
 

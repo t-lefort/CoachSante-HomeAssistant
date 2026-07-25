@@ -5,6 +5,8 @@ Sert à valider l'intégration Home Assistant avant que l'app iOS existe.
 
     python scripts/test_webhook.py <url> <secret> metrics
     python scripts/test_webhook.py <url> <secret> photo repas.jpg
+    python scripts/test_webhook.py <url> <secret> contexte "https://cookidoo.fr/…"
+    python scripts/test_webhook.py <url> <secret> contexte-photo emballage.jpg
 """
 
 from __future__ import annotations
@@ -41,21 +43,48 @@ def build_payload(mode: str, argument: str | None) -> dict:
     if mode == "photo":
         if argument is None:
             raise SystemExit("Le mode « photo » attend un chemin de fichier.")
-        path = Path(argument)
-        content_type = MIME_BY_SUFFIX.get(path.suffix.lower())
-        if content_type is None:
-            raise SystemExit(f"Extension non supportée : {path.suffix!r} (attendu .jpg ou .png)")
         return {
             "type": "meal_photo",
             "sent_at": sent_at,
             "note": "envoi de test",
-            "photo": {
-                "content_type": content_type,
-                "data": base64.b64encode(path.read_bytes()).decode(),
-            },
+            "photo": _photo(Path(argument)),
         }
 
-    raise SystemExit(f"Mode inconnu : {mode!r} (attendu « metrics » ou « photo »)")
+    if mode == "contexte":
+        if argument is None:
+            raise SystemExit("Le mode « contexte » attend un texte.")
+        return {
+            "type": "context",
+            "sent_at": sent_at,
+            "label": "Contexte de test",
+            "text": argument,
+        }
+
+    if mode == "contexte-photo":
+        if argument is None:
+            raise SystemExit("Le mode « contexte-photo » attend un chemin de fichier.")
+        return {
+            "type": "context",
+            "sent_at": sent_at,
+            "label": "Emballage de test",
+            "photo": _photo(Path(argument)),
+        }
+
+    raise SystemExit(
+        f"Mode inconnu : {mode!r} "
+        "(attendu « metrics », « photo », « contexte » ou « contexte-photo »)"
+    )
+
+
+def _photo(path: Path) -> dict:
+    """Encode une image en base64, avec son type MIME déduit de l'extension."""
+    content_type = MIME_BY_SUFFIX.get(path.suffix.lower())
+    if content_type is None:
+        raise SystemExit(f"Extension non supportée : {path.suffix!r} (attendu .jpg ou .png)")
+    return {
+        "content_type": content_type,
+        "data": base64.b64encode(path.read_bytes()).decode(),
+    }
 
 
 def main() -> int:

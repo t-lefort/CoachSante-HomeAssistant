@@ -1,0 +1,126 @@
+# Description des photos de contexte — CoachSanté
+#
+# Déclenchée par l'événement `coachsante_context_photo`, émis quand l'app iOS
+# envoie une photo de contexte (emballage, étiquette nutritionnelle, page de
+# recette). Fait lire l'étiquette par le modèle et renvoie sa description à
+# l'élément de contexte correspondant via `coachsante.add_context`.
+#
+# L'élément reste marqué « en attente » — et n'entre PAS dans le prompt
+# d'estimation des repas — tant que cette automatisation n'a pas répondu.
+#
+# À adapter avant utilisation :
+#   - `ai_task_entity` : l'entité AI Task (Outils de développement → États,
+#     filtrer sur `ai_task.`). La même que pour l'analyse des repas.
+#   - `media_root`     : la racine média de HA si ce n'est pas `/media`, et
+#                        seulement si `media_content_id` arrive vide.
+#
+# Voir README.md dans ce dossier pour l'installation et le dépannage.
+
+alias: CoachSanté — description d'une photo de contexte
+id: coachsante_analyse_contexte_photo
+description: >-
+  Relève ce qui est écrit sur un emballage photographié et l'ajoute au contexte
+  nutritionnel de la personne, pour affiner les estimations de repas à venir.
+mode: queued
+max: 10
+
+triggers:
+  - trigger: event
+    event_type: coachsante_context_photo
+
+variables:
+  # --- à personnaliser -----------------------------------------------------
+  ai_task_entity: ai_task.claude
+  media_root: /media
+  # -------------------------------------------------------------------------
+  personne: "{{ trigger.event.data.person }}"
+  libelle: "{{ trigger.event.data.label or 'Emballage' }}"
+  # L'intégration calcule déjà l'identifiant media source. Il n'est vide que si
+  # aucun dossier média local n'est déclaré (`homeassistant.media_dirs`) : on
+  # retombe alors sur le chemin disque converti à la main.
+  media_id: >-
+    {{ trigger.event.data.media_content_id
+       or ('media-source://media_source/local/'
+           ~ trigger.event.data.path | replace(media_root ~ '/', '', 1)) }}
+
+actions:
+  - alias: Faire lire l'étiquette par le modèle
+    action: ai_task.generate_data
+    data:
+      entity_id: "{{ ai_task_entity }}"
+      task_name: CoachSanté — lecture d'une étiquette
+      instructions: >-
+        La photo jointe montre un emballage alimentaire, une étiquette
+        nutritionnelle ou une page de recette.
+
+        Relève uniquement ce qui est écrit, sans interpréter ni conseiller :
+        - le produit et sa marque ;
+        - les valeurs nutritionnelles pour 100 g ou 100 ml (kcal, protéines,
+          glucides, sucres, lipides, fibres) ;
+        - le poids net ou le nombre de portions s'il est indiqué ;
+        - les ingrédients principaux si la liste est lisible.
+
+        Ce relevé servira plus tard à estimer un repas photographié : sois
+        factuel et compact. Si la photo est illisible ou ne montre rien de
+        comestible, mets `lisible` à false et dis pourquoi dans `releve`.
+      attachments:
+        - media_content_id: "{{ media_id }}"
+          media_content_type: image/jpeg
+      # Même piège que pour l'analyse de repas : la clé est `structure` (et non
+      # `structured_output`), au format HA `nom: {description, selector,
+      # required}` — pas du JSON Schema.
+      structure:
+        releve:
+          description: >-
+            Le relevé, en trois lignes au maximum, en français. Valeurs
+            nutritionnelles chiffrées quand elles sont lisibles.
+          selector:
+            text:
+              multiline: true
+          required: true
+        produit:
+          description: Nom court du produit et sa marque, pour servir de libellé.
+          selector:
+            text:
+          required: true
+        lisible:
+          description: false si la photo est inexploitable.
+          selector:
+            boolean:
+          required: true
+    response_variable: lecture
+
+  - alias: Oublier l'élément si la photo est inexploitable
+    if:
+      - condition: template
+        value_template: "{{ not lecture.data.lisible }}"
+    then:
+      - action: logbook.log
+        data:
+          name: CoachSanté
+          message: >-
+            Photo de contexte de {{ personne }} illisible :
+            {{ lecture.data.releve }}
+      # Sans ça, l'élément resterait « en attente » indéfiniment et sa photo
+      # traînerait sur le disque jusqu'à l'expiration de la rétention.
+      - action: coachsante.clear_context
+        data:
+          entry_id: "{{ trigger.event.data.entry_id }}"
+          context_id: "{{ trigger.event.data.context_id }}"
+      - stop: Photo de contexte inexploitable.
+
+  - alias: Renvoyer le relevé au contexte
+    action: coachsante.add_context
+    data:
+      entry_id: "{{ trigger.event.data.entry_id }}"
+      context_id: "{{ trigger.event.data.context_id }}"
+      label: "{{ lecture.data.produit }}"
+      text: "{{ lecture.data.releve }}"
+
+  - alias: Tracer la lecture dans le journal
+    action: logbook.log
+    data:
+      name: CoachSanté
+      message: >-
+        Contexte ajouté pour {{ personne }} ({{ libelle }}) :
+        {{ lecture.data.produit }}

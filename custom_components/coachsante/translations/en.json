@@ -25,10 +25,12 @@
       "init": {
         "title": "CoachSanté options",
         "data": {
-          "photo_retention": "Meal photos to keep"
+          "photo_retention": "Meal photos to keep",
+          "context_retention_days": "Context retention (days)"
         },
         "data_description": {
-          "photo_retention": "Older photos are deleted from disk beyond this count. 0 keeps everything."
+          "photo_retention": "Older photos are deleted from disk beyond this count. 0 keeps everything.",
+          "context_retention_days": "Recipe links, texts and packaging descriptions are fed to the meal estimation prompt for this many days, then forgotten. 0 keeps everything."
         }
       }
     }
@@ -63,6 +65,42 @@
           "description": "Which CoachSanté entry to reset."
         }
       }
+    },
+    "add_context": {
+      "name": "Add context",
+      "description": "Adds a text to the context handed to the model that estimates meals. With a context id, the text becomes the description of a context photo already received: that is how the automation triggered by \"coachsante_context_photo\" answers back.",
+      "fields": {
+        "entry_id": {
+          "name": "Person",
+          "description": "Which CoachSanté entry this belongs to."
+        },
+        "text": {
+          "name": "Text",
+          "description": "What the model should know: a recipe link, the nutrition facts read off a package, a note about portion size…"
+        },
+        "label": {
+          "name": "Label",
+          "description": "Short title shown in the list of context items."
+        },
+        "context_id": {
+          "name": "Context id",
+          "description": "Provided by the \"coachsante_context_photo\" event. Set it to attach this text to that photo; leave it empty to create a new item."
+        }
+      }
+    },
+    "clear_context": {
+      "name": "Clear context",
+      "description": "Forgets one context item, or the person's whole context.",
+      "fields": {
+        "entry_id": {
+          "name": "Person",
+          "description": "Which CoachSanté entry this belongs to."
+        },
+        "context_id": {
+          "name": "Context id",
+          "description": "The item to forget. Empty clears the whole context."
+        }
+      }
     }
   },
   "exceptions": {
@@ -74,6 +112,9 @@
     },
     "no_nutrient_provided": {
       "message": "Provide at least one nutrient to add."
+    },
+    "context_not_found": {
+      "message": "No context item with id {context_id}: it may have expired."
     }
   }
 }

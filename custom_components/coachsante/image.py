@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.core import HomeAssistant, callback
@@ -48,6 +49,15 @@ class CoachSanteMealImage(ImageEntity):
         )
         self._attr_image_last_updated = data.photo_updated
         self._attr_content_type = data.photo_content_type
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Le commentaire joint à la photo, et où la retrouver."""
+        return {
+            "note": self._data.photo_note,
+            "chemin": self._data.photo_path,
+            "media_content_id": self._data.media_content_id(self._data.photo_path),
+        }
 
     async def async_added_to_hass(self) -> None:
         """Publie son entity_id pour les événements, et suit les nouvelles photos."""

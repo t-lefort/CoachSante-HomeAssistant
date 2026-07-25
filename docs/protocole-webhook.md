@@ -173,20 +173,29 @@ prise de vue, qui peut être bien plus ancien et sert à nommer le fichier.
 avant l'envoi** (côté long ~1600 px, JPEG qualité ~0,7) : une photo brute
 d'iPhone dépasse allègrement la limite une fois encodée en base64.
 
+`note` est le commentaire saisi dans l'app. Il ne sert pas qu'à décorer : il part
+dans l'événement, il devient l'état du capteur `sensor.<prénom>_note_du_dernier_repas`
+et un attribut de l'entité image, et il a vocation à être repris dans le prompt
+d'analyse.
+
 Effets côté Home Assistant :
 
 1. La photo est écrite dans `<media>/coachsante/<prénom>/AAAA-MM-JJ_HHMMSS.jpg`.
-2. L'entité `image.<prénom>_dernier_repas` est rafraîchie.
-3. L'événement `coachsante_meal_photo` est émis :
+2. L'entité `image.<prénom>_dernier_repas` est rafraîchie (attributs `note`,
+   `chemin`, `media_content_id`).
+3. Le capteur `sensor.<prénom>_note_du_dernier_repas` prend la valeur de `note`.
+4. L'événement `coachsante_meal_photo` est émis :
 
 ```json
 {
   "entry_id": "01J…",
   "person": "Thomas",
   "path": "/media/coachsante/thomas/2026-07-22_123500.jpg",
+  "media_content_id": "media-source://media_source/local/coachsante/thomas/2026-07-22_123500.jpg",
   "image_entity_id": "image.thomas_dernier_repas",
   "note": "midi, au boulot",
-  "taken_at": "2026-07-22T12:35:00+02:00"
+  "taken_at": "2026-07-22T12:35:00+02:00",
+  "context": "- 2026-07-24 18:30 : Recette du soir — https://cookidoo.fr/…\n- 2026-07-25 19:59 : Paquet de raviolis — 232 kcal / 100 g…"
 }
 ```
 
@@ -194,12 +203,114 @@ C'est cet événement qui déclenche l'automatisation d'analyse. Elle renvoie se
 résultats par le service `coachsante.add_nutrition`, en passant `entry_id` tel
 quel.
 
+`context` est le contexte des deux dernières semaines, déjà assemblé (voir plus
+bas) : l'automatisation n'a rien à aller chercher, elle le colle dans son prompt.
+`media_content_id` est l'identifiant *media source* de la photo, à passer tel quel
+en pièce jointe à `ai_task.generate_data` ; il vaut `null` si aucun dossier média
+local n'est déclaré dans la configuration Home Assistant.
+
+## Type `context` — contexte pour l'estimation
+
+Ce qu'on veut que le modèle sache **avant** d'estimer un repas : un lien de
+recette, le poids d'une portion, l'étiquette nutritionnelle d'un produit.
+
+```json
+{
+  "type": "context",
+  "sent_at": "2026-07-25T18:00:00Z",
+  "captured_at": "2026-07-25T19:59:00+02:00",
+  "label": "Paquet de raviolis",
+  "text": "https://cookidoo.fr/recipes/recipe/fr-FR/r123456",
+  "photo": {
+    "content_type": "image/jpeg",
+    "data": "<base64>"
+  }
+}
+```
+
+Au moins un de `text` et `photo` doit être présent — sinon **400**. `label` et
+`captured_at` sont facultatifs (`captured_at` vaut par défaut l'instant de
+réception). Les contraintes sur `photo` sont celles de `meal_photo` ; pour une
+étiquette, l'app compresse moins (côté long ~2000 px, qualité ~0,85) : les petits
+caractères doivent rester lisibles.
+
+Réponse : `{"ok": true, "context_id": "3f9c1a7b2e4d6058", "path": "…"}` — `path`
+vaut `null` en l'absence de photo.
+
+Effets côté Home Assistant :
+
+1. La photo éventuelle est écrite dans `<media>/coachsante/<prénom>/contexte/`.
+2. L'élément entre dans le contexte de la personne, conservé **14 jours** (réglable
+   dans les options de l'intégration ; 0 = pour toujours).
+3. Le capteur `sensor.<prénom>_contexte_nutrition` est rafraîchi.
+4. Un événement est émis : `coachsante_context_photo` s'il y a une photo à faire
+   décrire, `coachsante_context` sinon.
+
+```json
+{
+  "entry_id": "01J…",
+  "person": "Thomas",
+  "context_id": "3f9c1a7b2e4d6058",
+  "label": "Paquet de raviolis",
+  "text": null,
+  "captured_at": "2026-07-25T19:59:00+02:00",
+  "path": "/media/coachsante/thomas/contexte/2026-07-25_195900.jpg",
+  "media_content_id": "media-source://media_source/local/coachsante/thomas/contexte/2026-07-25_195900.jpg"
+}
+```
+
+`path` et `media_content_id` ne figurent que dans `coachsante_context_photo`.
+
+### Analyse des photos de contexte
+
+Une photo de contexte est **analysée à réception**, par une automatisation côté
+utilisateur — l'intégration ne parle à aucun LLM. L'enchaînement :
+
+1. `coachsante_context_photo` est émis, l'élément est marqué « en attente » et
+   n'entre **pas** dans le prompt.
+2. L'automatisation fait décrire la photo (valeurs nutritionnelles, marque,
+   ingrédients) et rappelle `coachsante.add_context` avec le `context_id` reçu.
+3. La description devient l'analyse de l'élément, qui rejoint le prompt.
+
+Rejouer l'appel remplace l'analyse : une automatisation qui retente après un échec
+ne crée pas de doublon. Automatisation prête à adapter dans
+[`docs/automatisations/`](https://github.com/t-lefort/CoachSante-HomeAssistant/tree/main/docs/automatisations)
+du dépôt de l'intégration.
+
+### Ce que le modèle reçoit
+
+Le capteur `sensor.<prénom>_contexte_nutrition` a pour état le nombre d'éléments
+conservés, et porte en attribut `prompt` le bloc assemblé, du plus ancien au plus
+récent :
+
+```
+- 2026-07-24 18:30 : Recette du soir — https://cookidoo.fr/recipes/recipe/fr-FR/r123456
+- 2026-07-25 19:59 : Paquet de raviolis — Raviolis ricotta-épinards, 232 kcal / 100 g
+```
+
+Le même bloc part dans le champ `context` de `coachsante_meal_photo`.
+
+Bornes : 30 éléments, 2 000 caractères par texte, 6 000 caractères pour le bloc
+assemblé — au-delà, ce sont les plus anciens qui sautent. Un attribut d'entité
+plus gros que ça encombre le *recorder*.
+
+## Services
+
+| Service | À quoi il sert | Champs |
+|---|---|---|
+| `coachsante.add_nutrition` | Créditer les macros d'un repas analysé | `entry_id`, `label`, `energy_kcal`, `protein_g`, `carbs_g`, `fat_g`, `fiber_g`, `sugar_g` |
+| `coachsante.reset_day` | Remettre les compteurs du jour à zéro | `entry_id` |
+| `coachsante.add_context` | Ajouter un texte au contexte, ou décrire une photo de contexte | `entry_id`, `text`, `label`, `context_id` |
+| `coachsante.clear_context` | Oublier un élément de contexte, ou tous | `entry_id`, `context_id` |
+
 ## Autres événements
 
 | Événement | Émis quand | Données |
 |---|---|---|
 | `coachsante_metrics` | Un lot de métriques est accepté | `entry_id`, `person`, `keys` |
 | `coachsante_nutrition` | `add_nutrition` a été appelé | `entry_id`, `person`, `label`, `added`, `totals` |
+| `coachsante_context` | Un texte de contexte arrive (webhook ou `add_context`) | `entry_id`, `person`, `context_id`, `label`, `text`, `analysis`, `captured_at` |
+| `coachsante_context_photo` | Une photo de contexte attend son analyse | ci-dessus + `path`, `media_content_id` |
 
 ## Tester sans l'app
 

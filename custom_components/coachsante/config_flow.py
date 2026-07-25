@@ -14,9 +14,11 @@ from homeassistant.util import slugify
 import voluptuous as vol
 
 from .const import (
+    CONF_CONTEXT_RETENTION_DAYS,
     CONF_PERSON,
     CONF_PHOTO_RETENTION,
     CONF_SECRET,
+    DEFAULT_CONTEXT_RETENTION_DAYS,
     DEFAULT_PHOTO_RETENTION,
     DOMAIN,
 )
@@ -94,7 +96,7 @@ class CoachSanteConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class CoachSanteOptionsFlow(OptionsFlow):
-    """Options : rétention des photos de repas.
+    """Options : rétention des photos de repas et du contexte nutritionnel.
 
     Le rechargement de l'entrée est déclenché par l'`update_listener` posé dans
     `async_setup_entry`.
@@ -105,12 +107,19 @@ class CoachSanteOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        current = self.config_entry.options.get(CONF_PHOTO_RETENTION, DEFAULT_PHOTO_RETENTION)
+        options = self.config_entry.options
         schema = vol.Schema(
             {
-                vol.Required(CONF_PHOTO_RETENTION, default=current): vol.All(
-                    vol.Coerce(int), vol.Range(min=0)
-                )
+                vol.Required(
+                    CONF_PHOTO_RETENTION,
+                    default=options.get(CONF_PHOTO_RETENTION, DEFAULT_PHOTO_RETENTION),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0)),
+                vol.Required(
+                    CONF_CONTEXT_RETENTION_DAYS,
+                    default=options.get(
+                        CONF_CONTEXT_RETENTION_DAYS, DEFAULT_CONTEXT_RETENTION_DAYS
+                    ),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0)),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

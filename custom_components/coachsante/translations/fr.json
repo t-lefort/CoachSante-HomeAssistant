@@ -25,10 +25,12 @@
       "init": {
         "title": "Options de CoachSanté",
         "data": {
-          "photo_retention": "Nombre de photos de repas conservées"
+          "photo_retention": "Nombre de photos de repas conservées",
+          "context_retention_days": "Durée de conservation du contexte (jours)"
         },
         "data_description": {
-          "photo_retention": "Au-delà de ce nombre, les plus anciennes photos sont supprimées du disque. 0 = on garde tout."
+          "photo_retention": "Au-delà de ce nombre, les plus anciennes photos sont supprimées du disque. 0 = on garde tout.",
+          "context_retention_days": "Les liens de recettes, textes et descriptions d'emballages sont injectés dans le prompt d'estimation pendant ce nombre de jours, puis oubliés. 0 = on garde tout."
         }
       }
     }
@@ -63,6 +65,42 @@
           "description": "L'entrée CoachSanté à réinitialiser."
         }
       }
+    },
+    "add_context": {
+      "name": "Ajouter du contexte",
+      "description": "Ajoute un texte au contexte donné au modèle qui estime les repas. Avec un identifiant de contexte, le texte devient la description d'une photo de contexte déjà reçue : c'est ainsi que répond l'automatisation déclenchée par « coachsante_context_photo ».",
+      "fields": {
+        "entry_id": {
+          "name": "Personne",
+          "description": "L'entrée CoachSanté concernée."
+        },
+        "text": {
+          "name": "Texte",
+          "description": "Ce que le modèle doit savoir : lien de recette, valeurs nutritionnelles lues sur un emballage, précision sur une portion…"
+        },
+        "label": {
+          "name": "Libellé",
+          "description": "Titre court affiché dans la liste des éléments de contexte."
+        },
+        "context_id": {
+          "name": "Identifiant de contexte",
+          "description": "Fourni par l'événement « coachsante_context_photo ». Renseignez-le pour attacher ce texte à la photo correspondante ; laissez-le vide pour créer un nouvel élément."
+        }
+      }
+    },
+    "clear_context": {
+      "name": "Vider le contexte",
+      "description": "Oublie un élément de contexte, ou tout le contexte de la personne.",
+      "fields": {
+        "entry_id": {
+          "name": "Personne",
+          "description": "L'entrée CoachSanté concernée."
+        },
+        "context_id": {
+          "name": "Identifiant de contexte",
+          "description": "L'élément à oublier. Vide, c'est tout le contexte qui est effacé."
+        }
+      }
     }
   },
   "exceptions": {
@@ -74,6 +112,9 @@
     },
     "no_nutrient_provided": {
       "message": "Indiquez au moins un nutriment à ajouter."
+    },
+    "context_not_found": {
+      "message": "Aucun élément de contexte avec l'identifiant {context_id} : il a peut-être expiré."
     }
   }
 }

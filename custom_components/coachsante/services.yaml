@@ -71,3 +71,39 @@ reset_day:
       selector:
         config_entry:
           integration: coachsante
+
+add_context:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: coachsante
+    text:
+      required: true
+      example: >-
+        Raviolis ricotta-épinards Giovanni Rana, 250 g : 232 kcal, 9 g de
+        protéines, 30 g de glucides, 8,5 g de lipides pour 100 g.
+      selector:
+        text:
+          multiline: true
+    label:
+      example: Paquet de raviolis
+      selector:
+        text:
+    context_id:
+      example: 3f9c1a7b2e4d6058
+      selector:
+        text:
+
+clear_context:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: coachsante
+    context_id:
+      example: 3f9c1a7b2e4d6058
+      selector:
+        text:
