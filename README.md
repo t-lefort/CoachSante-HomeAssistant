@@ -55,6 +55,14 @@ python scripts/test_webhook.py https://exemple.fr/api/webhook/<id> <secret> metr
 python scripts/test_webhook.py https://exemple.fr/api/webhook/<id> <secret> photo repas.jpg
 ```
 
+## Exemples d'automatisations
+
+L'intégration fournit les entrées (events, entité `image`) et reçoit les sorties
+(`coachsante.add_nutrition`), mais ne contient aucune logique d'analyse : celle-ci
+vit dans tes automatisations. Des exemples prêts à adapter sont dans
+[docs/automatisations/](docs/automatisations/) — à commencer par l'analyse d'une
+photo de repas par un LLM, qui remplit les compteurs nutritionnels du jour.
+
 ## Protocole
 
 Le format des charges utiles du webhook (métriques, photo, signature) est décrit dans

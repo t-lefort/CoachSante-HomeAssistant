@@ -1,0 +1,168 @@
+# Analyse LLM des photos de repas — CoachSanté
+#
+# Déclenchée par l'événement `coachsante_meal_photo` émis par l'intégration
+# quand l'app iOS envoie une photo. Envoie la photo à Claude via l'entité
+# AI Task de l'intégration Anthropic, récupère les macros en JSON, et les
+# réinjecte dans les compteurs du jour via `coachsante.add_nutrition`.
+#
+# Première version : PAS de contexte de recettes (Cookidoo, courses…). Le
+# modèle estime uniquement à partir de la photo et de la note éventuelle.
+#
+# À adapter avant utilisation :
+#   - `ai_task_entity` : l'entité AI Task créée par l'intégration Anthropic
+#     (Outils de développement → États, filtrer sur `ai_task.`).
+#   - `media_root`     : la racine média de HA si ce n'est pas `/media`.
+#
+# Voir README.md dans ce dossier pour l'installation et le dépannage.
+
+alias: CoachSanté — analyse LLM d'une photo de repas
+id: coachsante_analyse_repas_llm
+description: >-
+  Estime les macros d'un repas à partir de sa photo et les ajoute aux
+  compteurs nutritionnels du jour de la personne concernée.
+mode: queued
+max: 10
+
+triggers:
+  - trigger: event
+    event_type: coachsante_meal_photo
+
+variables:
+  # --- à personnaliser -----------------------------------------------------
+  ai_task_entity: ai_task.claude
+  media_root: /media
+  # -------------------------------------------------------------------------
+  personne: "{{ trigger.event.data.person }}"
+  note: "{{ trigger.event.data.note or '' }}"
+  chemin: "{{ trigger.event.data.path }}"
+  # `path` est absolu côté disque (/media/coachsante/thomas/…) ; l'API media
+  # source veut un identifiant relatif à la racine média.
+  media_id: >-
+    {{ 'media-source://media_source/local/'
+       ~ chemin | replace(media_root ~ '/', '', 1) }}
+
+actions:
+  - alias: Demander l'analyse nutritionnelle à Claude
+    action: ai_task.generate_data
+    data:
+      entity_id: "{{ ai_task_entity }}"
+      task_name: CoachSanté — analyse de repas
+      instructions: >-
+        Tu es un diététicien. Analyse la photo de repas jointe et estime son
+        contenu nutritionnel.
+
+        {% if note %}Note laissée par la personne au moment de la prise de vue
+        (elle prime sur ta lecture visuelle en cas de doute) : « {{ note }} »
+        {% endif %}
+
+        Méthode :
+        - Identifie chaque aliment visible et estime sa quantité en grammes en
+          te servant des repères de taille présents sur la photo (assiette,
+          couverts, verre, main).
+        - Additionne les valeurs de tous les aliments pour obtenir les totaux
+          du repas.
+        - Les boissons comptent (sauf eau plate).
+        - En cas d'incertitude, donne l'estimation la plus probable plutôt
+          qu'une fourchette basse : mieux vaut une valeur approchée qu'un
+          sous-comptage systématique.
+        - Si la photo ne montre aucun aliment identifiable, renvoie des
+          valeurs nulles, `fiable` à false et explique pourquoi dans
+          `description`.
+
+        Réponds uniquement selon le schéma demandé. Les masses sont en grammes,
+        l'énergie en kilocalories. `description` est une phrase courte en
+        français listant ce que tu as identifié (elle sera affichée telle
+        quelle dans l'historique).
+      attachments:
+        - media_content_id: "{{ media_id }}"
+          media_content_type: image/jpeg
+      # ⚠️ La clé YAML est `structure`, PAS `structured_output` : le formulaire
+      # de HA affiche le libellé « Sortie structurée », mais le paramètre du
+      # service s'appelle `structure` (cf. Outils de développement → Actions →
+      # « Tous les paramètres disponibles »).
+      #
+      # Format Home Assistant : un dictionnaire `nom_du_champ: {description,
+      # selector, required}`. Ce n'est PAS du JSON Schema — pas de `type:
+      # object` ni de liste `required` globale ; chaque champ porte son propre
+      # `required` et son `selector` HA.
+      structure:
+        description:
+          description: Phrase courte décrivant le repas identifié.
+          selector:
+            text:
+          required: true
+        energy_kcal:
+          description: Énergie totale du repas en kilocalories.
+          selector:
+            number:
+          required: true
+        protein_g:
+          description: Protéines totales en grammes.
+          selector:
+            number:
+          required: true
+        carbs_g:
+          description: Glucides totaux en grammes.
+          selector:
+            number:
+          required: true
+        fat_g:
+          description: Lipides totaux en grammes.
+          selector:
+            number:
+          required: true
+        fiber_g:
+          description: Fibres totales en grammes.
+          selector:
+            number:
+          required: true
+        sugar_g:
+          description: Sucres totaux en grammes.
+          selector:
+            number:
+          required: true
+        fiable:
+          description: >-
+            false si la photo est inexploitable ou si aucun aliment n'est
+            identifiable.
+          selector:
+            boolean:
+          required: true
+    response_variable: analyse
+
+  - alias: Abandonner si l'analyse n'est pas exploitable
+    if:
+      - condition: template
+        value_template: "{{ not analyse.data.fiable }}"
+    then:
+      - action: logbook.log
+        data:
+          name: CoachSanté
+          message: >-
+            Photo de repas de {{ personne }} non analysable :
+            {{ analyse.data.description }}
+          entity_id: "{{ trigger.event.data.image_entity_id }}"
+      - stop: Photo non exploitable, rien à comptabiliser.
+
+  - alias: Ajouter les macros aux compteurs du jour
+    action: coachsante.add_nutrition
+    data:
+      entry_id: "{{ trigger.event.data.entry_id }}"
+      label: "{{ analyse.data.description }}"
+      energy_kcal: "{{ analyse.data.energy_kcal | float(0) | round(0) }}"
+      protein_g: "{{ analyse.data.protein_g | float(0) | round(1) }}"
+      carbs_g: "{{ analyse.data.carbs_g | float(0) | round(1) }}"
+      fat_g: "{{ analyse.data.fat_g | float(0) | round(1) }}"
+      fiber_g: "{{ analyse.data.fiber_g | float(0) | round(1) }}"
+      sugar_g: "{{ analyse.data.sugar_g | float(0) | round(1) }}"
+
+  - alias: Tracer l'analyse dans le journal
+    action: logbook.log
+    data:
+      name: CoachSanté
+      message: >-
+        Repas de {{ personne }} :
+        {{ analyse.data.description }}
+        ({{ analyse.data.energy_kcal | round(0) }} kcal,
+        {{ analyse.data.protein_g | round(0) }} g de protéines)
+      entity_id: "{{ trigger.event.data.image_entity_id }}"
