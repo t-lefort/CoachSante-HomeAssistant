@@ -1,6 +1,7 @@
 {
   "domain": "coachsante",
   "name": "CoachSanté",
+  "after_dependencies": ["recorder"],
   "codeowners": ["@t-lefort"],
   "config_flow": true,
   "dependencies": ["webhook"],
@@ -9,5 +10,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/t-lefort/CoachSante-HomeAssistant/issues",
   "requirements": [],
-  "version": "0.3.0"
+  "version": "0.4.0"
 }

@@ -151,6 +151,70 @@ convertit rien.
 Le poids reste porté par l'**intégration Withings officielle**. `body_mass` n'est
 là que pour d'éventuelles saisies manuelles dans Apple Santé.
 
+## Type `series` — détail horaire
+
+```json
+{
+  "type": "series",
+  "sent_at": "2026-07-22T10:15:00Z",
+  "series": [
+    {
+      "key": "steps",
+      "unit": "pas",
+      "kind": "sum",
+      "points": [
+        {"start": "2026-07-22T08:00:00Z", "value": 812},
+        {"start": "2026-07-22T09:00:00Z", "value": 1340}
+      ]
+    },
+    {
+      "key": "heart_rate",
+      "unit": "bpm",
+      "kind": "measurement",
+      "points": [
+        {"start": "2026-07-22T08:00:00Z", "mean": 68.2, "min": 54, "max": 112}
+      ]
+    }
+  ]
+}
+```
+
+**Ce type ne touche pas aux sensors.** Il alimente les *statistiques long terme*
+de Home Assistant, et rien d'autre : ni entité, ni événement, ni automatisation.
+C'est le partage voulu — les sensors du type `metrics` portent l'état courant et
+font tourner les automatisations, les séries servent à analyser après coup.
+
+La raison est structurelle : l'état d'un sensor est toujours horodaté
+**« maintenant »**, le recorder n'accepte pas d'état antidaté. Envoyer douze
+points d'un coup à 14 h écrirait douze états datés 14 h. Les statistiques long
+terme, elles, acceptent des points librement datés — c'est le mécanisme qu'utilisent
+les intégrations d'énergie pour importer un relevé de compteur historique.
+
+| Champ | Rôle |
+|---|---|
+| `key` | Clé du catalogue ci-dessus. Une clé inconnue est acceptée, avec l'`unit` fournie. |
+| `unit` | Reprise seulement si la clé est hors catalogue ; sinon l'unité du catalogue prime. |
+| `kind` | `sum` (total de l'heure : `value`) ou `measurement` (`mean`, et facultativement `min`/`max`, qui retombent sur `mean`). Défaut : `sum`. |
+| `points[].start` | Début de l'heure, **aligné sur l'heure pleine UTC**. Un point décalé fait rejeter le lot en 400. |
+
+Autres règles :
+
+- **Réimporter une heure l'écrase.** L'heure en cours part forcément partielle ;
+  la renvoyer au passage suivant la complète, sans jamais rien additionner en
+  double. L'app reprend donc toujours à la dernière heure déjà envoyée, incluse.
+- **Une série n'est jamais coupée entre deux envois.** Côté HA, la somme cumulée
+  d'un lot se calcule à partir de ce qui est déjà en base ; une série écrite en
+  deux fois dont la première moitié n'est pas encore commitée donnerait un cumul
+  faux. Les lots se remplissent par séries entières, 5 000 points maximum.
+- **Une heure sans échantillon est omise**, pas envoyée à zéro : rien ne distingue
+  « zéro pas » de « iPhone éteint ».
+- Seuls les types **quantitatifs** produisent des séries. Sommeil, séances,
+  heures debout et minutes de méditation restent des valeurs du jour.
+- Sans `recorder` sur l'instance, le lot est **accepté et ignoré** (`imported: 0`) :
+  le rejouer ne servirait à rien.
+
+La réponse est `{"ok": true, "imported": <points écrits>}`.
+
 ## Type `meal_photo` — photo de repas
 
 ```json

@@ -246,3 +246,30 @@ async def test_anti_rejeu_sent_at_absent(client: Any) -> None:
     body = encode({"type": "metrics", "metrics": []})
     resp = await client.post(URL, data=body, headers=sign(body))
     assert resp.status == 200
+
+
+# --- Séries horaires sans recorder -----------------------------------------
+
+
+async def test_series_ignorees_sans_recorder(client: Any) -> None:
+    """Sans recorder, le lot est accepté et ignoré, pas rejeté.
+
+    Répondre autre chose que 2xx ferait retenir le lot dans la file de l'app, à
+    rejouer indéfiniment pour un stockage qui n'existe pas sur cette instance.
+    Les autres tests de séries tournent avec le recorder, dans `test_series.py`.
+    """
+    payload = {
+        "type": "series",
+        "sent_at": dt_util.utcnow().isoformat(),
+        "series": [
+            {
+                "key": "steps",
+                "kind": "sum",
+                "points": [{"start": "2026-07-20T06:00:00Z", "value": 100}],
+            }
+        ],
+    }
+    body = encode(payload)
+    resp = await client.post(URL, data=body, headers=sign(body))
+    assert resp.status == 200
+    assert (await resp.json())["imported"] == 0

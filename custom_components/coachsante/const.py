@@ -41,6 +41,8 @@ REPLAY_MAX_AGE_SECONDS: Final = 300
 PAYLOAD_TYPE_METRICS: Final = "metrics"
 PAYLOAD_TYPE_MEAL_PHOTO: Final = "meal_photo"
 PAYLOAD_TYPE_CONTEXT: Final = "context"
+# Détail horaire, rangé dans les statistiques long terme (voir `series.py`).
+PAYLOAD_TYPE_SERIES: Final = "series"
 
 # --- Contexte nutritionnel -------------------------------------------------
 # Bornes volontairement basses : le contenu part en attribut d'entité, et un

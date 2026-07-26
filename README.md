@@ -14,6 +14,11 @@ le webhook est développée dans un dépôt séparé.
   contexte nutritionnel, vérifie une signature HMAC-SHA256.
 - **Capteurs santé** (`sensor.*`) : pas, dépense énergétique, fréquence cardiaque,
   sommeil, métriques de démarche… créés à la volée selon ce que l'app envoie.
+- **Statistiques long terme** : le détail heure par heure des métriques
+  quantitatives, importé avec ses vraies dates. Les capteurs ci-dessus portent
+  l'état courant et font tourner les automatisations ; ces statistiques servent à
+  analyser l'historique fin (panneau « Statistiques », carte graphique). Ce ne
+  sont pas des entités : elles ne sont pas lisibles depuis un template.
 - **Compteurs nutritionnels** cumulatifs sur la journée (kcal, protéines, glucides,
   lipides, fibres, sucres), remis à zéro à minuit heure locale
   (`state_class: total` + `last_reset`).
@@ -76,7 +81,8 @@ d'estimer.
 
 ## Protocole
 
-Le format des charges utiles du webhook (métriques, photo, contexte, signature) est
+Le format des charges utiles du webhook (métriques, séries horaires, photo,
+contexte, signature) est
 décrit dans [docs/protocole-webhook.md](docs/protocole-webhook.md). C'est le contrat
 que l'app iOS doit respecter.
 

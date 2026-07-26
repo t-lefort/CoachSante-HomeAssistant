@@ -32,6 +32,7 @@ from .const import (
     PAYLOAD_TYPE_CONTEXT,
     PAYLOAD_TYPE_MEAL_PHOTO,
     PAYLOAD_TYPE_METRICS,
+    PAYLOAD_TYPE_SERIES,
     REPLAY_MAX_AGE_SECONDS,
     SIGNATURE_PREFIX,
     signal_context_updated,
@@ -39,6 +40,7 @@ from .const import (
     signal_photo_updated,
 )
 from .data import CoachSanteConfigEntry, CoachSanteData
+from .series import async_import_series
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,6 +83,8 @@ async def async_handle_webhook(
     payload_type = payload.get("type")
     if payload_type == PAYLOAD_TYPE_METRICS:
         return _handle_metrics(hass, entry, data, payload)
+    if payload_type == PAYLOAD_TYPE_SERIES:
+        return await _handle_series(hass, data, payload)
     if payload_type == PAYLOAD_TYPE_MEAL_PHOTO:
         return await _handle_meal_photo(hass, entry, data, payload)
     if payload_type == PAYLOAD_TYPE_CONTEXT:
@@ -140,6 +144,31 @@ def _handle_metrics(
         )
 
     return web.json_response({"ok": True, "accepted": len(accepted)})
+
+
+async def _handle_series(
+    hass: HomeAssistant,
+    data: CoachSanteData,
+    payload: dict[str, Any],
+) -> web.Response:
+    """Range le détail horaire dans les statistiques long terme.
+
+    Ne touche ni aux sensors ni aux événements : les automatisations continuent de
+    lire l'état courant, ces séries ne servent qu'à l'analyse a posteriori.
+    """
+    series = payload.get("series")
+    if not isinstance(series, list):
+        return web.Response(status=400, text="« series » doit être une liste")
+
+    try:
+        imported = await async_import_series(hass, data.person, series)
+    except ValueError as err:
+        # Série malformée : la rejouer n'y changera rien, on répond 400 pour que
+        # l'app jette le lot au lieu de le retenter indéfiniment.
+        _LOGGER.warning("Série refusée pour %s : %s", data.person, err)
+        return web.Response(status=400, text=str(err))
+
+    return web.json_response({"ok": True, "imported": imported})
 
 
 async def _handle_meal_photo(

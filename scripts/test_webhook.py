@@ -4,6 +4,7 @@
 Sert à valider l'intégration Home Assistant avant que l'app iOS existe.
 
     python scripts/test_webhook.py <url> <secret> metrics
+    python scripts/test_webhook.py <url> <secret> series
     python scripts/test_webhook.py <url> <secret> photo repas.jpg
     python scripts/test_webhook.py <url> <secret> contexte "https://cookidoo.fr/…"
     python scripts/test_webhook.py <url> <secret> contexte-photo emballage.jpg
@@ -12,7 +13,7 @@ Sert à valider l'intégration Home Assistant avant que l'app iOS existe.
 from __future__ import annotations
 
 import base64
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 import json
@@ -32,6 +33,39 @@ EXEMPLE_METRIQUES = [
 ]
 
 
+def _exemple_series() -> list[dict]:
+    """Six heures de détail, alignées sur l'heure pleine UTC comme l'exige HA."""
+    heure = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    debut = heure - timedelta(hours=5)
+    pas = [320, 1180, 640, 90, 1520, 430]
+    coeur = [58, 72, 66, 61, 84, 70]
+    return [
+        {
+            "key": "steps",
+            "unit": "pas",
+            "kind": "sum",
+            "points": [
+                {"start": (debut + timedelta(hours=i)).isoformat(), "value": valeur}
+                for i, valeur in enumerate(pas)
+            ],
+        },
+        {
+            "key": "heart_rate",
+            "unit": "bpm",
+            "kind": "measurement",
+            "points": [
+                {
+                    "start": (debut + timedelta(hours=i)).isoformat(),
+                    "mean": valeur,
+                    "min": valeur - 6,
+                    "max": valeur + 18,
+                }
+                for i, valeur in enumerate(coeur)
+            ],
+        },
+    ]
+
+
 def build_payload(mode: str, argument: str | None) -> dict:
     """Construit la charge utile correspondant au mode demandé."""
     # `sent_at` daté à l'instant de l'envoi : c'est ce que vérifie l'anti-rejeu.
@@ -39,6 +73,9 @@ def build_payload(mode: str, argument: str | None) -> dict:
 
     if mode == "metrics":
         return {"type": "metrics", "sent_at": sent_at, "metrics": EXEMPLE_METRIQUES}
+
+    if mode == "series":
+        return {"type": "series", "sent_at": sent_at, "series": _exemple_series()}
 
     if mode == "photo":
         if argument is None:
@@ -72,7 +109,7 @@ def build_payload(mode: str, argument: str | None) -> dict:
 
     raise SystemExit(
         f"Mode inconnu : {mode!r} "
-        "(attendu « metrics », « photo », « contexte » ou « contexte-photo »)"
+        "(attendu « metrics », « series », « photo », « contexte » ou « contexte-photo »)"
     )
 
 
