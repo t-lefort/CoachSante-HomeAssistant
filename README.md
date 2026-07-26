@@ -113,6 +113,20 @@ La suite pytest (`tests/`) s'appuie sur `pytest-homeassistant-custom-component` 
 config flow, webhook (signature, tailles, types), nutrition et persistance.
 Home Assistant tourne en Python 3.13 ; le code cible cette version.
 
+### Publier une version
+
+**HACS suit les releases GitHub, pas le `manifest.json` de la branche.** Monter
+la version dans le manifeste ne suffit donc pas : tant qu'aucune release n'est
+créée, HACS continue de proposer la précédente. Rien n'automatise ça.
+
+```bash
+git tag -a v0.4.0 -m "Résumé en une ligne"
+git push origin v0.4.0
+gh release create v0.4.0 --title "v0.4.0 — …" --verify-tag --latest --notes "…"
+```
+
+Le tag doit porter sur un commit dont le `manifest.json` annonce la même version.
+
 ## Licence
 
 MIT — voir [LICENSE](LICENSE).
