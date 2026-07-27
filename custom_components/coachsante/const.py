@@ -41,6 +41,7 @@ REPLAY_MAX_AGE_SECONDS: Final = 300
 PAYLOAD_TYPE_METRICS: Final = "metrics"
 PAYLOAD_TYPE_MEAL_PHOTO: Final = "meal_photo"
 PAYLOAD_TYPE_CONTEXT: Final = "context"
+PAYLOAD_TYPE_GOAL: Final = "goal"
 # Détail horaire, rangé dans les statistiques long terme (voir `series.py`).
 PAYLOAD_TYPE_SERIES: Final = "series"
 
@@ -106,3 +107,8 @@ def signal_photo_updated(entry_id: str) -> str:
 def signal_context_updated(entry_id: str) -> str:
     """Signal émis quand le contexte nutritionnel change."""
     return f"{DOMAIN}_context_{entry_id}"
+
+
+def signal_goal_updated(entry_id: str) -> str:
+    """Signal émis quand l'objectif personnel change."""
+    return f"{DOMAIN}_goal_{entry_id}"

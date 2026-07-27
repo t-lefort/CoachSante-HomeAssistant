@@ -134,6 +134,7 @@ async def test_persistance_rechargement(
     data = await _fresh_data(hass, mock_entry)
     data.apply_metrics([{"key": "steps", "value": 8421, "day": _today()}])
     data.add_nutrition({"energy_kcal": 500.0, "protein_g": 30.0}, "déjeuner")
+    data.goal = "Perdre 5 kg progressivement"
     await data._store.async_save(data._as_dict())
 
     # Nouveau cycle de vie (redémarrage HA) sur la même entrée.
@@ -144,6 +145,7 @@ async def test_persistance_rechargement(
     assert reloaded.nutrition["energy_kcal"] == 500.0
     assert reloaded.nutrition["protein_g"] == 30.0
     assert reloaded.last_meal["label"] == "déjeuner"
+    assert reloaded.goal == "Perdre 5 kg progressivement"
 
 
 async def test_photo_supprimee_a_la_main(

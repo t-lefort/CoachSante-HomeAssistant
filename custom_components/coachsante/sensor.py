@@ -17,6 +17,7 @@ from .const import (
     DEFAULT_CONTEXT_RETENTION_DAYS,
     DOMAIN,
     signal_context_updated,
+    signal_goal_updated,
     signal_metrics_updated,
     signal_nutrition_updated,
     signal_photo_updated,
@@ -50,6 +51,7 @@ async def async_setup_entry(
     entities.append(CoachSanteLastMealSensor(data))
     entities.append(CoachSanteMealNoteSensor(data))
     entities.append(CoachSanteContextSensor(data))
+    entities.append(CoachSanteGoalSensor(data))
     entities.extend(CoachSanteMetricSensor(data, key) for key in data.metrics)
     async_add_entities(entities)
 
@@ -259,6 +261,33 @@ class CoachSanteContextSensor(CoachSanteSensorBase):
             async_dispatcher_connect(
                 self.hass,
                 signal_context_updated(self._data.entry.entry_id),
+                self.async_write_ha_state,
+            )
+        )
+
+
+class CoachSanteGoalSensor(CoachSanteSensorBase):
+    """Objectif personnel défini depuis l'app."""
+
+    _attr_name = "Objectif"
+    _attr_icon = "mdi:target"
+
+    def __init__(self, data: CoachSanteData) -> None:
+        """Initialise le capteur d'objectif."""
+        super().__init__(data)
+        self._attr_unique_id = f"{data.entry.entry_id}_goal"
+
+    @property
+    def native_value(self) -> str | None:
+        """Objectif courant, ou état inconnu tant qu'il est vide."""
+        return self._data.goal or None
+
+    async def async_added_to_hass(self) -> None:
+        """S'abonne aux changements d'objectif."""
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_goal_updated(self._data.entry.entry_id),
                 self.async_write_ha_state,
             )
         )

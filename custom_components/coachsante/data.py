@@ -112,6 +112,7 @@ class CoachSanteData:
         self.nutrition_day: str = _today()
         self.meals: list[dict[str, Any]] = []
         self.context: list[ContextItem] = []
+        self.goal: str = ""
 
         self.photo_path: str | None = None
         self.photo_updated: datetime | None = None
@@ -156,6 +157,7 @@ class CoachSanteData:
             for item in stored.get("context", [])
             if isinstance(item, dict) and "id" in item and "at" in item
         ]
+        self.goal = stored.get("goal", "") if isinstance(stored.get("goal", ""), str) else ""
 
         photo = stored.get("photo", {})
         self.photo_path = photo.get("path")
@@ -196,6 +198,7 @@ class CoachSanteData:
                 "meals": self.meals,
             },
             "context": [asdict(item) for item in self.context],
+            "goal": self.goal,
             "photo": {
                 "path": self.photo_path,
                 "note": self.photo_note,

@@ -151,6 +151,20 @@ convertit rien.
 Le poids reste porté par l'**intégration Withings officielle**. `body_mass` n'est
 là que pour d'éventuelles saisies manuelles dans Apple Santé.
 
+## Type `goal` — objectif personnel
+
+```json
+{
+  "type": "goal",
+  "sent_at": "2026-07-27T18:15:00Z",
+  "goal": "Perdre 5 kg progressivement tout en gardant ma force"
+}
+```
+
+`goal` est une chaîne de 255 caractères maximum. Une chaîne vide efface
+l’objectif. Home Assistant l’expose dans le capteur « Objectif » de la personne,
+afin que les automatisations de conseil puissent l’utiliser.
+
 ## Type `series` — détail horaire
 
 ```json

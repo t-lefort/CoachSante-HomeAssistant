@@ -30,12 +30,14 @@ from .const import (
     HEADER_SIGNATURE,
     MAX_PAYLOAD_BYTES,
     PAYLOAD_TYPE_CONTEXT,
+    PAYLOAD_TYPE_GOAL,
     PAYLOAD_TYPE_MEAL_PHOTO,
     PAYLOAD_TYPE_METRICS,
     PAYLOAD_TYPE_SERIES,
     REPLAY_MAX_AGE_SECONDS,
     SIGNATURE_PREFIX,
     signal_context_updated,
+    signal_goal_updated,
     signal_metrics_updated,
     signal_photo_updated,
 )
@@ -89,6 +91,8 @@ async def async_handle_webhook(
         return await _handle_meal_photo(hass, entry, data, payload)
     if payload_type == PAYLOAD_TYPE_CONTEXT:
         return await _handle_context(hass, entry, data, payload)
+    if payload_type == PAYLOAD_TYPE_GOAL:
+        return _handle_goal(hass, entry, data, payload)
 
     return web.Response(status=400, text=f"type de charge utile inconnu : {payload_type!r}")
 
@@ -144,6 +148,26 @@ def _handle_metrics(
         )
 
     return web.json_response({"ok": True, "accepted": len(accepted)})
+
+
+def _handle_goal(
+    hass: HomeAssistant,
+    entry: CoachSanteConfigEntry,
+    data: CoachSanteData,
+    payload: dict[str, Any],
+) -> web.Response:
+    """Enregistre l'objectif personnel défini dans l'app."""
+    goal = payload.get("goal")
+    if not isinstance(goal, str):
+        return web.Response(status=400, text="« goal » doit être une chaîne")
+    goal = goal.strip()
+    if len(goal) > 255:
+        return web.Response(status=400, text="« goal » dépasse 255 caractères")
+
+    data.goal = goal
+    data.async_schedule_save()
+    async_dispatcher_send(hass, signal_goal_updated(entry.entry_id))
+    return web.json_response({"ok": True})
 
 
 async def _handle_series(

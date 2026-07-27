@@ -151,6 +151,37 @@ async def test_metriques_entrees_invalides_ignorees(client: Any) -> None:
     assert (await resp.json())["accepted"] == 1
 
 
+# --- Objectif --------------------------------------------------------------
+
+
+async def test_objectif_met_a_jour_le_capteur(
+    hass: HomeAssistant, client: Any, init_integration: MockConfigEntry
+) -> None:
+    """L'objectif est conservé et immédiatement exposé par une entité."""
+    body = encode({"type": "goal", "goal": "  Perdre 5 kg progressivement  "})
+    resp = await client.post(URL, data=body, headers=sign(body))
+    assert resp.status == 200
+
+    await hass.async_block_till_done()
+    data = init_integration.runtime_data
+    assert data.goal == "Perdre 5 kg progressivement"
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{init_integration.entry_id}_goal"
+    )
+    assert entity_id is not None
+    assert hass.states.get(entity_id).state == "Perdre 5 kg progressivement"
+
+
+@pytest.mark.parametrize("goal", [None, 42, "x" * 256])
+async def test_objectif_invalide_refuse(client: Any, goal: Any) -> None:
+    """Le capteur HA impose une chaîne assez courte pour servir d'état."""
+    body = encode({"type": "goal", "goal": goal})
+    resp = await client.post(URL, data=body, headers=sign(body))
+    assert resp.status == 400
+
+
 # --- Photos ----------------------------------------------------------------
 
 
