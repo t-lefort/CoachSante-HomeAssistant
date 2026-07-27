@@ -42,6 +42,7 @@ from .const import (
     signal_photo_updated,
 )
 from .data import CoachSanteConfigEntry, CoachSanteData
+from .recipe import async_extract_recipe
 from .series import async_import_series
 
 _LOGGER = logging.getLogger(__name__)
@@ -258,6 +259,19 @@ async def _handle_context(
     captured_at = dt_util.parse_datetime(payload.get("captured_at") or "") or dt_util.now()
     captured_at = dt_util.as_local(captured_at)
 
+    # Un lien seul est une vraie source de contexte, pas une simple note : les
+    # pages de recette exposent généralement portions, ingrédients et nutrition
+    # en JSON-LD. L'échec d'extraction ne rejette jamais le webhook ; le lien brut
+    # reste alors disponible comme avant.
+    if (
+        photo is None
+        and text
+        and _standalone_https_url(text)
+        and (recipe := await async_extract_recipe(hass, text.strip()))
+    ):
+        label = recipe.name
+        text = f"{text.strip()}\n{recipe.text}"
+
     written = None
     if photo is not None:
         try:
@@ -297,6 +311,12 @@ async def _handle_context(
     return web.json_response(
         {"ok": True, "context_id": item.id, "path": str(written) if written else None}
     )
+
+
+def _standalone_https_url(text: str) -> bool:
+    """Vrai pour un champ composé uniquement d'une URL HTTPS."""
+    stripped = text.strip()
+    return stripped.startswith("https://") and not any(char.isspace() for char in stripped)
 
 
 async def _decode_photo(hass: HomeAssistant, photo: Any) -> tuple[bytes, str]:

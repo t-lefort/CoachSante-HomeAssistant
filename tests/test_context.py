@@ -65,9 +65,18 @@ def _entity_id(hass: HomeAssistant, entry_id: str, suffix: str) -> str | None:
 
 
 async def test_contexte_texte_seul(
-    hass: HomeAssistant, client: Any, init_integration: MockConfigEntry
+    hass: HomeAssistant,
+    client: Any,
+    init_integration: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Un texte de contexte est stocké et part dans l'event `coachsante_context`."""
+    async def no_recipe(*_: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.coachsante.webhook.async_extract_recipe", no_recipe
+    )
     events = async_capture_events(hass, EVENT_CONTEXT)
     body = encode(
         {
@@ -97,6 +106,41 @@ async def test_contexte_texte_seul(
     assert len(events) == 1
     assert events[0].data["context_id"] == item.id
     assert events[0].data["person"] == "Thomas"
+
+
+async def test_lien_de_recette_est_enrichi(
+    hass: HomeAssistant,
+    client: Any,
+    init_integration: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Un lien seul apporte portions et quantités au contexte du prochain repas."""
+    from custom_components.coachsante.recipe import RecipeSummary
+
+    async def recipe(*_: Any) -> RecipeSummary:
+        return RecipeSummary(
+            name="Gratin de chou-fleur",
+            text=(
+                "Recette : Gratin de chou-fleur\n"
+                "Rendement : 6 portions\n"
+                "Ingrédients : 1000 g de chou-fleur; 250 g de lait de coco"
+            ),
+        )
+
+    monkeypatch.setattr(
+        "custom_components.coachsante.webhook.async_extract_recipe", recipe
+    )
+    url = "https://cookidoo.fr/recipes/recipe/fr-FR/r825145"
+    body = encode({"type": "context", "text": url})
+
+    response = await client.post(URL, data=body, headers=sign(body))
+
+    assert response.status == 200
+    item = init_integration.runtime_data.context[0]
+    assert item.label == "Gratin de chou-fleur"
+    assert item.text.startswith(url)
+    assert "6 portions" in item.text
+    assert "1000 g de chou-fleur" in item.text
 
 
 async def test_contexte_photo_demande_son_analyse(
