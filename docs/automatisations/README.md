@@ -10,11 +10,30 @@ logique d'analyse.
 |---|---|
 | [`analyse-repas-llm.yaml`](analyse-repas-llm.yaml) | Photo de repas → estimation des macros par Claude → `coachsante.add_nutrition` |
 | [`analyse-contexte-photo.yaml`](analyse-contexte-photo.yaml) | Photo d'emballage → relevé de l'étiquette → `coachsante.add_context` |
+| [`rappel-repas-manquant.yaml`](rappel-repas-manquant.yaml) | Notification si un repas attendu n'est pas encore enregistré |
 
 Les deux se complètent : la seconde remplit le contexte, que la première reçoit
 tout assemblé dans l'événement `coachsante_meal_photo` et injecte dans son
 prompt. Installer la première seule fonctionne ; installer la seconde sans la
 première laisserait des photos de contexte en attente d'analyse pour rien.
+
+## Rappel de repas manquant
+
+L'exemple `rappel-repas-manquant.yaml` contrôle après le petit-déjeuner, le
+déjeuner et le dîner que le capteur « Dernier repas » contient respectivement
+un, deux ou trois repas pour la journée. Il envoie une notification seulement
+si le compte attendu n'est pas atteint.
+
+Avant de le recharger dans Home Assistant, remplace dans `variables` :
+
+- `meal_sensor` par l'identifiant du capteur
+  `sensor.<personne>_dernier_repas` ;
+- `notify_action` par l'action mobile visible dans *Outils de développement →
+  Actions*, par exemple `notify.mobile_app_iphone_de_thomas`.
+
+Les trois horaires se règlent dans `triggers`. Le compteur est alimenté après
+l'analyse nutritionnelle : prévois donc quelques minutes entre l'heure habituelle
+du repas et celle du rappel.
 
 ## Analyse LLM des photos de repas
 

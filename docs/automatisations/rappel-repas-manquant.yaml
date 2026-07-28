@@ -1,0 +1,50 @@
+# Rappel lorsqu'un repas attendu n'a pas encore été enregistré.
+#
+# À personnaliser :
+#   - `meal_sensor` : capteur « Dernier repas » de la personne ;
+#   - `notify_action` : action de notification du téléphone.
+# Les horaires peuvent être adaptés directement dans les trois déclencheurs.
+
+alias: CoachSanté — rappel de repas manquant
+id: coachsante_rappel_repas_manquant
+description: >-
+  Notifie si le nombre de repas analysés aujourd'hui est inférieur au nombre
+  attendu après le petit-déjeuner, le déjeuner ou le dîner.
+mode: single
+
+triggers:
+  - trigger: time
+    at: "09:30:00"
+    id: petit_dejeuner
+  - trigger: time
+    at: "14:30:00"
+    id: dejeuner
+  - trigger: time
+    at: "21:30:00"
+    id: diner
+
+variables:
+  # --- à personnaliser -----------------------------------------------------
+  meal_sensor: sensor.thomas_dernier_repas
+  notify_action: notify.mobile_app_iphone_de_thomas
+  # -------------------------------------------------------------------------
+  expected_meals: >-
+    {{ {'petit_dejeuner': 1, 'dejeuner': 2, 'diner': 3}[trigger.id] }}
+  recorded_meals: >-
+    {{ state_attr(meal_sensor, 'repas_du_jour') | int(0) }}
+  meal_name: >-
+    {{ {'petit_dejeuner': 'petit-déjeuner',
+        'dejeuner': 'déjeuner',
+        'diner': 'dîner'}[trigger.id] }}
+
+conditions:
+  - condition: template
+    value_template: "{{ recorded_meals | int < expected_meals | int }}"
+
+actions:
+  - action: "{{ notify_action }}"
+    data:
+      title: CoachSanté
+      message: >-
+        Le {{ meal_name }} ne semble pas encore enregistré
+        ({{ recorded_meals }}/{{ expected_meals }} repas aujourd'hui).
