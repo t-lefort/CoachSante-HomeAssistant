@@ -202,22 +202,26 @@ async def _handle_meal_photo(
     data: CoachSanteData,
     payload: dict[str, Any],
 ) -> web.Response:
-    """Range une photo de repas et prévient les automatisations."""
-    try:
-        raw, content_type = await _decode_photo(hass, payload.get("photo"))
-    except ValueError as err:
-        return web.Response(status=400, text=str(err))
-
+    """Range un repas, décrit par une note et éventuellement une photo."""
+    photo = payload.get("photo")
+    note = payload.get("note")
+    note = note.strip() if isinstance(note, str) else None
+    if photo is None and not note:
+        return web.Response(status=400, text="« note » ou « photo » est obligatoire")
     taken_at = dt_util.parse_datetime(payload.get("taken_at") or "") or dt_util.now()
     taken_at = dt_util.as_local(taken_at)
-    note = payload.get("note")
 
-    path = await data.async_save_photo(
-        raw,
-        content_type=content_type,
-        note=note if isinstance(note, str) else None,
-        taken_at=taken_at,
-    )
+    path = None
+    if photo is not None:
+        try:
+            raw, content_type = await _decode_photo(hass, photo)
+        except ValueError as err:
+            return web.Response(status=400, text=str(err))
+        path = await data.async_save_photo(
+            raw, content_type=content_type, note=note, taken_at=taken_at
+        )
+    else:
+        data.record_text_meal(note=note, taken_at=taken_at)
 
     data.async_schedule_save()
     async_dispatcher_send(hass, signal_photo_updated(entry.entry_id))
@@ -226,8 +230,8 @@ async def _handle_meal_photo(
         {
             "entry_id": entry.entry_id,
             "person": data.person,
-            "path": str(path),
-            "media_content_id": data.media_content_id(str(path)),
+            "path": str(path) if path else None,
+            "media_content_id": data.media_content_id(str(path)) if path else None,
             "image_entity_id": data.image_entity_id,
             "note": data.photo_note,
             "taken_at": taken_at.isoformat(),
@@ -237,7 +241,7 @@ async def _handle_meal_photo(
         },
     )
 
-    return web.json_response({"ok": True, "path": str(path)})
+    return web.json_response({"ok": True, "path": str(path) if path else None})
 
 
 async def _handle_context(

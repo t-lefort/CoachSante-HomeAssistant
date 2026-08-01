@@ -475,6 +475,13 @@ class CoachSanteData:
         self.photo_content_type = content_type
         return written
 
+    def record_text_meal(self, *, note: str, taken_at: datetime) -> None:
+        """Met à jour le dernier repas lorsqu'il ne contient pas de photo."""
+        self.photo_path = None
+        self.photo_updated = taken_at
+        self.photo_note = note
+        self.photo_content_type = "image/jpeg"
+
     async def async_save_context_photo(
         self, raw: bytes, *, content_type: str, captured_at: datetime
     ) -> Path:

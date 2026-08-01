@@ -1,7 +1,7 @@
-# Analyse LLM des photos de repas — CoachSanté
+# Analyse LLM des repas — CoachSanté
 #
 # Déclenchée par l'événement `coachsante_meal_photo` émis par l'intégration
-# quand l'app iOS envoie une photo. Envoie la photo à Claude via l'entité
+# quand l'app iOS envoie une description et/ou une photo. Envoie le repas à Claude via l'entité
 # AI Task de l'intégration Anthropic, récupère les macros en JSON, et les
 # réinjecte dans les compteurs du jour via `coachsante.add_nutrition`.
 #
@@ -19,10 +19,10 @@
 #
 # Voir README.md dans ce dossier pour l'installation et le dépannage.
 
-alias: CoachSanté — analyse LLM d'une photo de repas
+alias: CoachSanté — analyse LLM d'un repas
 id: coachsante_analyse_repas_llm
 description: >-
-  Estime les macros d'un repas à partir de sa photo et les ajoute aux
+  Estime les macros d'un repas à partir de sa description et/ou de sa photo et les ajoute aux
   compteurs nutritionnels du jour de la personne concernée.
 mode: queued
 max: 10
@@ -39,15 +39,15 @@ variables:
   personne: "{{ trigger.event.data.person }}"
   note: "{{ trigger.event.data.note or '' }}"
   contexte: "{{ trigger.event.data.context or '' }}"
-  chemin: "{{ trigger.event.data.path }}"
+  chemin: "{{ trigger.event.data.path or '' }}"
   # L'intégration calcule déjà l'identifiant media source. Il n'est vide que si
   # aucun dossier média local n'est déclaré (`homeassistant.media_dirs`) : on
   # retombe alors sur la conversion à la main du chemin disque
   # (/media/coachsante/thomas/…), relatif à la racine média.
   media_id: >-
     {{ trigger.event.data.media_content_id
-       or ('media-source://media_source/local/'
-           ~ chemin | replace(media_root ~ '/', '', 1)) }}
+       or (('media-source://media_source/local/'
+           ~ chemin | replace(media_root ~ '/', '', 1)) if chemin else '') }}
 
 actions:
   - alias: Demander l'analyse nutritionnelle à Claude
@@ -56,8 +56,8 @@ actions:
       entity_id: "{{ ai_task_entity }}"
       task_name: CoachSanté — analyse de repas
       instructions: >-
-        Tu es un diététicien. Analyse la photo de repas jointe et estime son
-        contenu nutritionnel.
+        Tu es un diététicien. Estime le contenu nutritionnel du repas décrit
+        ci-dessous, à l'aide de la photo lorsqu'elle est jointe.
 
         {% if note %}Note laissée par la personne au moment de la prise de vue
         (elle prime sur ta lecture visuelle en cas de doute) : « {{ note }} »
@@ -76,26 +76,26 @@ actions:
         {% endif %}
 
         Méthode :
-        - Identifie chaque aliment visible et estime sa quantité en grammes en
-          te servant des repères de taille présents sur la photo (assiette,
-          couverts, verre, main).
+        - Identifie chaque aliment décrit ou visible et estime sa quantité en
+          grammes. Avec une photo, sers-toi des repères de taille présents
+          (assiette, couverts, verre, main).
         - Additionne les valeurs de tous les aliments pour obtenir les totaux
           du repas.
         - Les boissons comptent (sauf eau plate).
         - En cas d'incertitude, donne l'estimation la plus probable plutôt
           qu'une fourchette basse : mieux vaut une valeur approchée qu'un
           sous-comptage systématique.
-        - Si la photo ne montre aucun aliment identifiable, renvoie des
-          valeurs nulles, `fiable` à false et explique pourquoi dans
+        - Si ni la note ni la photo ne permettent d'identifier le repas, renvoie
+          des valeurs nulles, `fiable` à false et explique pourquoi dans
           `description`.
 
         Réponds uniquement selon le schéma demandé. Les masses sont en grammes,
         l'énergie en kilocalories. `description` est une phrase courte en
         français listant ce que tu as identifié (elle sera affichée telle
         quelle dans l'historique).
-      attachments:
-        - media_content_id: "{{ media_id }}"
-          media_content_type: image/jpeg
+      attachments: >-
+        {{ [{'media_content_id': media_id, 'media_content_type': 'image/jpeg'}]
+           if media_id else [] }}
       # ⚠️ La clé YAML est `structure`, PAS `structured_output` : le formulaire
       # de HA affiche le libellé « Sortie structurée », mais le paramètre du
       # service s'appelle `structure` (cf. Outils de développement → Actions →

@@ -229,7 +229,7 @@ Autres règles :
 
 La réponse est `{"ok": true, "imported": <points écrits>}`.
 
-## Type `meal_photo` — photo de repas
+## Type `meal_photo` — repas
 
 ```json
 {
@@ -247,6 +247,10 @@ La réponse est `{"ok": true, "imported": <points écrits>}`.
 `sent_at` sert l'anti-rejeu (voir plus haut) ; `taken_at` est l'instant de la
 prise de vue, qui peut être bien plus ancien et sert à nommer le fichier.
 
+`photo` est facultatif : une note textuelle suffit pour déclarer un repas. Au
+moins un de `note` et `photo` doit être présent — sinon **400**. Le nom de type
+historique `meal_photo` est conservé pour la rétrocompatibilité.
+
 `content_type` accepte `image/jpeg` et `image/png`. L'app doit **redimensionner
 avant l'envoi** (côté long ~1600 px, JPEG qualité ~0,7) : une photo brute
 d'iPhone dépasse allègrement la limite une fois encodée en base64.
@@ -256,7 +260,7 @@ dans l'événement, il devient l'état du capteur `sensor.<prénom>_note_du_dern
 et un attribut de l'entité image, et il a vocation à être repris dans le prompt
 d'analyse.
 
-Effets côté Home Assistant :
+Effets côté Home Assistant lorsqu'une photo est présente :
 
 1. La photo est écrite dans `<media>/coachsante/<prénom>/AAAA-MM-JJ_HHMMSS.jpg`.
 2. L'entité `image.<prénom>_dernier_repas` est rafraîchie (attributs `note`,
@@ -285,7 +289,9 @@ quel.
 bas) : l'automatisation n'a rien à aller chercher, elle le colle dans son prompt.
 `media_content_id` est l'identifiant *media source* de la photo, à passer tel quel
 en pièce jointe à `ai_task.generate_data` ; il vaut `null` si aucun dossier média
-local n'est déclaré dans la configuration Home Assistant.
+local n'est déclaré dans la configuration Home Assistant. Pour un repas sans
+photo, `path` et `media_content_id` valent `null` ; l'automatisation analyse alors
+la note seule.
 
 ## Type `context` — contexte pour l'estimation
 

@@ -219,6 +219,37 @@ async def test_photo_valide(
     assert data.photo_path == str(path)
 
 
+async def test_repas_texte_sans_photo(
+    hass: HomeAssistant, client: Any, init_integration: MockConfigEntry
+) -> None:
+    """Une note seule déclenche l'analyse sans créer de fichier image."""
+    events = async_capture_events(hass, EVENT_MEAL_PHOTO)
+    body = encode(
+        {
+            "type": "meal_photo",
+            "taken_at": "2026-07-22T12:35:00+02:00",
+            "note": "Soupe de légumes et deux tranches de pain",
+        }
+    )
+    resp = await client.post(URL, data=body, headers=sign(body))
+    assert resp.status == 200
+    assert (await resp.json())["path"] is None
+
+    await hass.async_block_till_done()
+    assert len(events) == 1
+    assert events[0].data["note"] == "Soupe de légumes et deux tranches de pain"
+    assert events[0].data["path"] is None
+    assert events[0].data["media_content_id"] is None
+    assert init_integration.runtime_data.photo_path is None
+
+
+async def test_repas_sans_texte_ni_photo_refuse(client: Any) -> None:
+    """Un repas vide ne fournit rien à analyser : 400."""
+    body = encode({"type": "meal_photo"})
+    resp = await client.post(URL, data=body, headers=sign(body))
+    assert resp.status == 400
+
+
 async def test_photo_base64_invalide(client: Any) -> None:
     """Un base64 cassé : 400."""
     body = encode(

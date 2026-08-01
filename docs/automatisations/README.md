@@ -8,7 +8,7 @@ logique d'analyse.
 
 | Fichier | Ce qu'il fait |
 |---|---|
-| [`analyse-repas-llm.yaml`](analyse-repas-llm.yaml) | Photo de repas → estimation des macros par Claude → `coachsante.add_nutrition` |
+| [`analyse-repas-llm.yaml`](analyse-repas-llm.yaml) | Repas décrit et/ou photographié → estimation des macros par Claude → `coachsante.add_nutrition` |
 | [`analyse-contexte-photo.yaml`](analyse-contexte-photo.yaml) | Photo d'emballage → relevé de l'étiquette → `coachsante.add_context` |
 | [`rappel-repas-manquant.yaml`](rappel-repas-manquant.yaml) | Notification si un repas attendu n'est pas encore enregistré |
 
@@ -35,15 +35,15 @@ Les trois horaires se règlent dans `triggers`. Le compteur est alimenté après
 l'analyse nutritionnelle : prévois donc quelques minutes entre l'heure habituelle
 du repas et celle du rappel.
 
-## Analyse LLM des photos de repas
+## Analyse LLM des repas
 
 ### Ce que ça fait
 
 ```
-app iOS ──photo──▶ webhook ──▶ event coachsante_meal_photo
+app iOS ──texte/photo──▶ webhook ──▶ event coachsante_meal_photo
                                         │
                                         ▼
-                            ai_task.generate_data (Claude + photo)
+                            ai_task.generate_data (Claude + texte/photo)
                                         │
                                    JSON structuré
                                         │
@@ -72,7 +72,7 @@ atterrissent toujours sur les compteurs de la bonne personne.
    Récupère l'`entity_id` obtenu dans *Outils de développement → États* en
    filtrant sur `ai_task.`.
 
-2. **Un modèle qui lit les images.** Dans les options de l'entrée, prends un
+2. **Un modèle qui lit les images** si les repas peuvent inclure une photo. Dans les options de l'entrée, prends un
    modèle multimodal récent (`claude-opus-5` ou `claude-sonnet-5` côté
    Anthropic). Les modèles de la classe « mini » / Haiku sont à éviter : ils
    sous-estiment nettement les quantités.

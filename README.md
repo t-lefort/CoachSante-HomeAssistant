@@ -1,7 +1,7 @@
 # CoachSanté — intégration Home Assistant
 
 Intégration custom Home Assistant qui reçoit les données de santé (Apple Santé /
-HealthKit) et les photos de repas envoyées par l'app iOS **CoachSanté**, et les
+HealthKit) et les repas décrits ou photographiés dans l'app iOS **CoachSanté**, et les
 expose en entités exploitables par des automatisations (analyse nutritionnelle par
 LLM, conseils de perte de poids).
 
@@ -10,7 +10,7 @@ le webhook est développée dans un dépôt séparé.
 
 ## Ce que fournit l'intégration
 
-- **Webhook signé** (un par personne) : reçoit métriques santé, photos de repas et
+- **Webhook signé** (un par personne) : reçoit métriques santé, repas et
   contexte nutritionnel, vérifie une signature HMAC-SHA256.
 - **Capteurs santé** (`sensor.*`) : pas, dépense énergétique, fréquence cardiaque,
   sommeil, métriques de démarche… créés à la volée selon ce que l'app envoie.
@@ -74,14 +74,14 @@ python scripts/test_webhook.py https://exemple.fr/api/webhook/<id> <secret> cont
 L'intégration fournit les entrées (events, entité `image`) et reçoit les sorties
 (`coachsante.add_nutrition`, `coachsante.add_context`), mais ne contient aucune
 logique d'analyse : celle-ci vit dans tes automatisations. Des exemples prêts à
-adapter sont dans [docs/automatisations/](docs/automatisations/) — l'analyse d'une
-photo de repas par un LLM, qui remplit les compteurs nutritionnels du jour, et la
+adapter sont dans [docs/automatisations/](docs/automatisations/) — l'analyse d'un
+repas décrit et/ou photographié par un LLM, qui remplit les compteurs nutritionnels du jour, et la
 description des photos de contexte, qui alimente ce que le modèle sait avant
 d'estimer.
 
 ## Protocole
 
-Le format des charges utiles du webhook (métriques, séries horaires, photo,
+Le format des charges utiles du webhook (métriques, séries horaires, repas,
 contexte, signature) est
 décrit dans [docs/protocole-webhook.md](docs/protocole-webhook.md). C'est le contrat
 que l'app iOS doit respecter.
